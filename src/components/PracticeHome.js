@@ -7,11 +7,6 @@ const PracticeHome = () => {
     return localStorage.getItem('selectedLanguage') || 'en';
   });
 
-  const practiceTypes = [
-    { name: '단어 연습', path: '/practice/words', description: '단어 타이핑 연습으로 기본기 향상' },
-    { name: '문장 연습', path: '/practice/sentences', description: '문장 타이핑으로 실전 연습' },
-  ];
-
   const handleLanguageChange = (language) => {
     setSelectedLanguage(language);
     localStorage.setItem('selectedLanguage', language);
@@ -52,24 +47,25 @@ const PracticeHome = () => {
         </button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8 w-full max-w-4xl">
-        {practiceTypes.map((type, index) => (
-          <Link
-            key={index}
-            to={`${type.path}/${selectedLanguage}`}
-            className="bg-white hover:bg-blue-50 text-blue-800 font-semibold py-8 px-6 border border-blue-400 rounded-lg shadow-lg transition duration-300 ease-in-out transform hover:scale-105 hover:shadow-xl"
-          >
-            <h2 className="text-2xl mb-3">{type.name}</h2>
-            <p className="text-sm text-gray-600">{type.description}</p>
-          </Link>
-        ))}
+      {/* 타이핑 연습 시작 버튼 */}
+      <div className="mb-8">
+        <Link
+          to={`/practice/${selectedLanguage}`}
+          className="bg-white hover:bg-blue-50 text-blue-800 font-semibold py-8 px-12 border border-blue-400 rounded-lg shadow-lg transition duration-300 ease-in-out transform hover:scale-105 hover:shadow-xl text-center block"
+        >
+          <h2 className="text-3xl mb-3">타이핑 연습 시작</h2>
+          <p className="text-lg text-gray-600">
+            {selectedLanguage === 'en' ? 'English' : '한국어'} 타이핑 연습
+          </p>
+        </Link>
       </div>
 
       <div className="text-center max-w-2xl">
         <h3 className="text-2xl font-semibold mb-4">사용 방법</h3>
         <ul className="text-left list-disc list-inside mb-6 space-y-2">
           <li>위에서 언어를 선택하세요 (English 또는 한국어)</li>
-          <li>연습하고 싶은 모드를 선택하세요 (단어 또는 문장)</li>
+          <li>타이핑 연습 시작을 클릭하세요</li>
+          <li>단어 또는 문장 모드를 선택하세요</li>
           <li>화면에 표시된 텍스트를 정확하게 입력하세요</li>
           <li>타이핑 속도와 정확도를 향상시켜보세요</li>
         </ul>
