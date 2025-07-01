@@ -3,7 +3,8 @@ import { useNavigate, useParams } from 'react-router-dom';
 
 const TypingSession = () => {
   const navigate = useNavigate();
-  const { language } = useParams(); // en/kr
+  const { language: initialLanguage } = useParams(); // en/kr
+  const [language, setLanguage] = useState(initialLanguage || 'en'); // 내부 상태로 관리
   const [mode, setMode] = useState('words'); // words 또는 sentences
   const [wordTarget, setWordTarget] = useState(30); // 단어 목표 개수 (30, 50, 100)
   const [typingMode, setTypingMode] = useState('basic'); // basic 또는 overlay
@@ -21,6 +22,33 @@ const TypingSession = () => {
   const [correctCharacters, setCorrectCharacters] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [isCompleted, setIsCompleted] = useState(false); // 목표 달성 완료
+
+  // 언어 토글 핸들러
+  const handleLanguageToggle = useCallback(() => {
+    const newLanguage = language === 'en' ? 'kr' : 'en';
+    setLanguage(newLanguage);
+    // URL도 업데이트
+    navigate(`/practice/${newLanguage}`, { replace: true });
+    // 언어 변경 시 데이터 다시 로딩을 위해 리셋
+    setCurrentText('');
+    setNextText('');
+    setAllTexts([]);
+    resetPractice();
+  }, [language, navigate]);
+
+  // 연습 초기화 (전체 리셋용)
+  const resetPractice = useCallback(() => {
+    setUserInput('');
+    setStartTime(null);
+    setCpm(0);
+    setAccuracy(100);
+    setCompletedCount(0);
+    setPreviousCpm(0);
+    setPreviousAccuracy(100);
+    setTotalCharacters(0);
+    setCorrectCharacters(0);
+    setIsCompleted(false);
+  }, []);
 
   // 랜덤 텍스트 선택 함수
   const getRandomText = useCallback((excludeCurrent = true) => {
@@ -196,19 +224,7 @@ const TypingSession = () => {
     }
   }, [calculateCPM, calculateAccuracy, startTime, isCompleted]);
 
-  // 연습 초기화 (전체 리셋용)
-  const resetPractice = useCallback(() => {
-    setUserInput('');
-    setStartTime(null);
-    setCpm(0);
-    setAccuracy(100);
-    setCompletedCount(0);
-    setPreviousCpm(0);
-    setPreviousAccuracy(100);
-    setTotalCharacters(0);
-    setCorrectCharacters(0);
-    setIsCompleted(false);
-  }, []);
+  // 연습 초기화 (전체 리셋용) - 이미 위에 정의되어 있으므로 제거
 
   // 다음 텍스트로 넘어갈 때
   const moveToNextText = useCallback(() => {
@@ -330,11 +346,11 @@ const TypingSession = () => {
           
           if (originalChar && typedChar === originalChar) {
             // 올바른 글자
-            className += ' text-blue-500';
+            className += ' text-gray-700';
           } else {
             // 틀린 글자 또는 초과 타이핑
             if (language === 'kr' && index === userInput.length - 1 && originalChar) {
-              className += ' text-gray-600'; // 한글 작성 중
+              className += ' text-gray-500'; // 한글 작성 중
             } else {
               className += ' text-red-500 bg-red-100 rounded px-1';
             }
@@ -342,7 +358,7 @@ const TypingSession = () => {
         } else if (index < currentText.length) {
           // 아직 타이핑하지 않은 부분
           displayChar = originalChar === ' ' ? '\u00A0' : originalChar;
-          className += ' text-gray-600';
+          className += ' text-gray-400';
           
           // 현재 타이핑 위치에 커서 표시
           if (index === userInput.length) {
@@ -355,7 +371,7 @@ const TypingSession = () => {
             <span key={index} className={`relative ${className}`} style={{ whiteSpace: 'pre' }}>
               {displayChar}
               {showCursor && (
-                <span className="absolute top-1/2 left-0 transform -translate-y-1/2 w-0.5 h-8 bg-blue-500 animate-pulse"></span>
+                <span className="absolute top-1/2 left-0 transform -translate-y-1/2 w-0.5 h-8 bg-gray-600 animate-pulse"></span>
               )}
             </span>
           );
@@ -366,25 +382,25 @@ const TypingSession = () => {
       if (userInput.length >= currentText.length) {
         result.push(
           <span key="end-cursor" className="relative inline-block h-8">
-            <span className="absolute top-1/2 left-0 transform -translate-y-1/2 w-0.5 h-8 bg-blue-500 animate-pulse"></span>
+            <span className="absolute top-1/2 left-0 transform -translate-y-1/2 w-0.5 h-8 bg-gray-600 animate-pulse"></span>
           </span>
         );
       }
       
       return result;
     } else {
-      // 기본 모드: 기존 방식
+      // 기본 모드: 겹쳐모드와 동일한 색상 적용
       return currentText.split('').map((char, index) => {
-        let className = 'text-gray-800 transition-all duration-200';
+        let className = 'text-gray-400 transition-all duration-200'; // 아직 입력하지 않은 부분
         let underline = false;
 
         if (index < userInput.length) {
           if (char === userInput[index]) {
-            className = 'text-blue-500 transition-all duration-200';
+            className = 'text-gray-700 transition-all duration-200'; // 올바른 글자 - 진한 색
           } else {
             // 한글 작성 중일 때는 빨간색으로 표시하지 않음
             if (language === 'kr' && index === userInput.length - 1) {
-              className = 'text-gray-800';
+              className = 'text-gray-500'; // 한글 작성 중
             } else {
               className = 'text-red-500 transition-all duration-200';
             }
@@ -403,7 +419,7 @@ const TypingSession = () => {
           <span key={index} className={`relative ${className}`} style={{ whiteSpace: 'pre' }}>
             {displayChar}
             {underline && (
-              <span className="absolute bottom-0 left-0 w-full h-0.5 bg-blue-500 transition-all duration-200"></span>
+              <span className="absolute bottom-0 left-0 w-full h-0.5 bg-gray-600 transition-all duration-200"></span>
             )}
           </span>
         );
@@ -514,12 +530,10 @@ const TypingSession = () => {
     navigate('/');
   }, [navigate]);
 
-  // 새로운 시작 함수 제거
-
   // 로딩 중 표시
   if (isLoading) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-blue-100 p-4">
+      <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100 p-4">
         <div className="text-2xl text-gray-600">데이터를 불러오는 중...</div>
       </div>
     );
@@ -528,11 +542,11 @@ const TypingSession = () => {
   // 데이터가 없을 때
   if (allTexts.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-blue-100 p-4">
+      <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100 p-4">
         <div className="text-2xl text-gray-600 mb-4">데이터를 불러올 수 없습니다.</div>
         <button
           onClick={handleGoBack}
-          className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition duration-300 ease-in-out transform hover:scale-105 active:scale-95"
+          className="px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-800 transition duration-300 ease-in-out transform hover:scale-105 active:scale-95"
         >
           홈으로 돌아가기
         </button>
@@ -542,88 +556,112 @@ const TypingSession = () => {
 
   return (
     <div 
-      className="flex flex-col items-center justify-center min-h-screen bg-blue-100 p-4"
+      className="flex flex-col items-center justify-center min-h-screen bg-gray-100 p-4"
       onClick={handleContainerClick}
     >
       <div className="w-full max-w-4xl">
         <div className="mb-6 flex justify-between items-center">
-          <h1 className="text-2xl font-bold text-gray-800">
-            타이핑 연습 - {language === 'en' ? 'English' : '한국어'}
-          </h1>
+
           <div className="flex space-x-4 text-lg font-semibold">
-            <span className="text-blue-600">현재: {cpm} CPM</span>
-            <span className="text-green-600">정확도: {accuracy}%</span>
+            <span className="text-gray-700">현재: {cpm} CPM</span>
+            <span className="text-gray-600">정확도: {accuracy}%</span>
             {previousCpm > 0 && (
-              <span className="text-purple-600">이전: {previousCpm} CPM</span>
+              <span className="text-gray-500">이전: {previousCpm} CPM</span>
             )}
             {previousAccuracy < 100 && (
-              <span className="text-orange-600">이전 정확도: {previousAccuracy}%</span>
+              <span className="text-gray-500">이전 정확도: {previousAccuracy}%</span>
             )}
           </div>
         </div>
         
         {/* 모드 토글 버튼 */}
-        <div className="mb-6 flex justify-center space-x-4">
-          <button
-            onClick={() => setTypingMode(typingMode === 'basic' ? 'overlay' : 'basic')}
-            className={`px-8 py-3 rounded-lg transition-all duration-500 ease-in-out transform hover:scale-105 active:scale-95 ${
-              typingMode === 'overlay' 
-                ? 'bg-purple-500 text-white hover:bg-purple-600 shadow-lg' 
-                : 'bg-blue-500 text-white hover:bg-blue-600 shadow-lg'
-            }`}
-          >
-            <span className="transition-all duration-300">
-              {typingMode === 'basic' ? '🎯 기본 모드' : '👻 겹쳐쓰기 모드'}
-            </span>
-          </button>
-          
-          <div className="flex space-x-2">
+        <div className="mb-6 flex justify-between items-center">
+          {/* 왼쪽: 타이핑 모드 토글과 언어 토글 */}
+          <div className="flex items-center space-x-4">
             <button
-              onClick={() => handleModeChange('words')}
-              className={`px-6 py-3 rounded-lg transition-all duration-300 ease-in-out transform hover:scale-105 active:scale-95 ${
-                mode === 'words' 
-                  ? 'bg-green-500 text-white hover:bg-green-600 shadow-md' 
-                  : 'bg-gray-200 hover:bg-gray-300'
+              onClick={() => setTypingMode(typingMode === 'basic' ? 'overlay' : 'basic')}
+              className={`px-8 py-3 rounded-lg transition-all duration-500 ease-in-out transform hover:scale-105 active:scale-95 ${
+                typingMode === 'overlay' 
+                  ? 'bg-gray-700 text-white hover:bg-gray-800 shadow-lg' 
+                  : 'bg-gray-600 text-white hover:bg-gray-700 shadow-lg'
               }`}
             >
-              단어
+              <span className="transition-all duration-300">
+                {typingMode === 'basic' ? '기본 모드' : '겹쳐쓰기 모드'}
+              </span>
             </button>
+
+            {/* 언어 토글 버튼 */}
             <button
-              onClick={() => handleModeChange('sentences')}
-              className={`px-6 py-3 rounded-lg transition-all duration-300 ease-in-out transform hover:scale-105 active:scale-95 ${
-                mode === 'sentences' 
-                  ? 'bg-green-500 text-white hover:bg-green-600 shadow-md' 
-                  : 'bg-gray-200 hover:bg-gray-300'
-              }`}
+              onClick={handleLanguageToggle}
+              className="px-6 py-3 rounded-lg transition-all duration-300 ease-in-out transform hover:scale-105 active:scale-95 bg-gray-500 text-white hover:bg-gray-600 shadow-md"
             >
-              문장
+              {language === 'en' ? '🇺🇸 EN' : '🇰🇷 KR'}
             </button>
+            
+            {/* 문장 모드일 때 출처 표시 */}
+            {mode === 'sentences' && currentText && (
+              <div className="bg-gray-100 px-4 py-2 rounded-lg border border-gray-200">
+                <span className="text-sm text-gray-600 italic">
+                  # {(() => {
+                    const currentSentence = allTexts.find(item => item.text === currentText);
+                    return currentSentence ? currentSentence.source : '알 수 없음';
+                  })()}
+                </span>
+              </div>
+            )}
           </div>
           
-          {/* 단어 모드일 때 목표 개수 선택 */}
-          {mode === 'words' && (
+          {/* 오른쪽: 단어/문장 모드와 목표 설정 */}
+          <div className="flex space-x-4">
             <div className="flex space-x-2">
-              {[30, 50, 100].map(target => (
-                <button
-                  key={target}
-                  onClick={() => {
-                    setWordTarget(target);
-                    resetPractice();
-                  }}
-                  className={`px-4 py-3 rounded-lg transition-all duration-300 ease-in-out transform hover:scale-105 active:scale-95 ${
-                    wordTarget === target 
-                      ? 'bg-orange-500 text-white hover:bg-orange-600 shadow-md' 
-                      : 'bg-gray-200 hover:bg-gray-300'
-                  }`}
-                >
-                  {target}개
-                </button>
-              ))}
+              <button
+                onClick={() => handleModeChange('words')}
+                className={`px-6 py-3 rounded-lg transition-all duration-300 ease-in-out transform hover:scale-105 active:scale-95 ${
+                  mode === 'words' 
+                    ? 'bg-gray-700 text-white hover:bg-gray-800 shadow-md' 
+                    : 'bg-gray-200 hover:bg-gray-300 text-gray-700'
+                }`}
+              >
+                단어
+              </button>
+              <button
+                onClick={() => handleModeChange('sentences')}
+                className={`px-6 py-3 rounded-lg transition-all duration-300 ease-in-out transform hover:scale-105 active:scale-95 ${
+                  mode === 'sentences' 
+                    ? 'bg-gray-700 text-white hover:bg-gray-800 shadow-md' 
+                    : 'bg-gray-200 hover:bg-gray-300 text-gray-700'
+                }`}
+              >
+                문장
+              </button>
             </div>
-          )}
+            
+            {/* 단어 모드일 때 목표 개수 선택 */}
+            {mode === 'words' && (
+              <div className="flex space-x-2">
+                {[30, 50, 100].map(target => (
+                  <button
+                    key={target}
+                    onClick={() => {
+                      setWordTarget(target);
+                      resetPractice();
+                    }}
+                    className={`px-4 py-3 rounded-lg transition-all duration-300 ease-in-out transform hover:scale-105 active:scale-95 ${
+                      wordTarget === target 
+                        ? 'bg-gray-600 text-white hover:bg-gray-700 shadow-md' 
+                        : 'bg-gray-200 hover:bg-gray-300 text-gray-700'
+                    }`}
+                  >
+                    {target}개
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
 
-        <div className="mb-6 text-2xl leading-relaxed bg-white p-6 rounded-lg shadow flex items-center whitespace-pre-wrap transition-all duration-300">
+        <div className="mb-6 text-2xl leading-relaxed bg-white p-6 rounded-lg shadow flex items-center whitespace-pre-wrap transition-all duration-300 border border-gray-200">
           {renderCurrentText()}
           {renderNextWord()}
         </div>
@@ -631,13 +669,13 @@ const TypingSession = () => {
         {/* 겹치기 모드가 아닐 때만 input 창 표시 */}
         {typingMode !== 'overlay' && (
           <div className="relative w-full mb-4">
-            <div className="absolute inset-0 bg-white border-2 border-blue-300 rounded-lg shadow"></div>
+            <div className="absolute inset-0 bg-white border-2 border-gray-300 rounded-lg shadow"></div>
             <input
               type="text"
               value={userInput}
               onChange={handleInputChange}
               onKeyDown={handleKeyDown}
-              className="relative w-full p-4 text-xl bg-transparent focus:outline-none"
+              className="relative w-full p-4 text-xl bg-transparent focus:outline-none focus:border-gray-500"
               placeholder={mode === 'words' ? "단어를 입력하고 스페이스바나 엔터를 누르세요..." : "문장을 입력하고 엔터를 누르세요..."}
               autoFocus
             />
@@ -667,7 +705,7 @@ const TypingSession = () => {
             <span className="text-sm text-gray-500">
               {typingMode === 'basic' ? '기본 모드' : '겹쳐쓰기 모드'}
             </span>
-            <span className="text-sm text-blue-500">
+            <span className="text-sm text-gray-600">
               {mode === 'words' 
                 ? `전체 ${totalCharacters}자 입력 (정확: ${correctCharacters}자)` 
                 : `현재 ${userInput.length}/${currentText.length}자`
@@ -680,35 +718,35 @@ const TypingSession = () => {
       {/* 완료 화면 */}
       {isCompleted && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white p-8 rounded-lg shadow-lg text-center max-w-md w-full mx-4">
-            <h2 className="text-3xl font-bold mb-6 text-blue-600">
-              🎉 목표 달성! 🎉
+          <div className="bg-white p-8 rounded-lg shadow-lg text-center max-w-md w-full mx-4 border border-gray-200">
+            <h2 className="text-3xl font-bold mb-6 text-gray-800">
+              목표 달성!
             </h2>
             <div className="mb-6 space-y-4">
-              <div className="text-lg">
+              <div className="text-lg text-gray-700">
                 <span className="font-semibold">{wordTarget}개 단어 완료!</span>
               </div>
               <div className="grid grid-cols-2 gap-4 text-xl">
-                <div className="bg-blue-50 p-4 rounded-lg">
-                  <div className="text-blue-600 font-bold text-2xl">{cpm}</div>
-                  <div className="text-blue-800 text-sm">CPM</div>
+                <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                  <div className="text-gray-700 font-bold text-2xl">{cpm}</div>
+                  <div className="text-gray-600 text-sm">CPM</div>
                 </div>
-                <div className="bg-green-50 p-4 rounded-lg">
-                  <div className="text-green-600 font-bold text-2xl">{accuracy}%</div>
-                  <div className="text-green-800 text-sm">정확도</div>
+                <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                  <div className="text-gray-700 font-bold text-2xl">{accuracy}%</div>
+                  <div className="text-gray-600 text-sm">정확도</div>
                 </div>
               </div>
             </div>
             <div className="flex justify-center space-x-4">
               <button
                 onClick={resetPractice}
-                className="px-6 py-3 bg-blue-500 text-white rounded-lg shadow text-lg font-semibold transition duration-300 ease-in-out hover:bg-blue-600 hover:scale-105 active:scale-95"
+                className="px-6 py-3 bg-gray-700 text-white rounded-lg shadow text-lg font-semibold transition duration-300 ease-in-out hover:bg-gray-800 hover:scale-105 active:scale-95"
               >
                 다시 시작
               </button>
               <button
                 onClick={() => navigate('/')}
-                className="px-6 py-3 bg-gray-100 text-blue-500 rounded-lg shadow text-lg font-semibold transition duration-300 ease-in-out hover:bg-gray-200 hover:scale-105 active:scale-95"
+                className="px-6 py-3 bg-gray-200 text-gray-700 rounded-lg shadow text-lg font-semibold transition duration-300 ease-in-out hover:bg-gray-300 hover:scale-105 active:scale-95"
               >
                 홈으로
               </button>
@@ -721,7 +759,7 @@ const TypingSession = () => {
       {!isCompleted && (
         <button
           onClick={handleGoBack}
-          className="mt-8 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition duration-300 ease-in-out transform hover:scale-105 active:scale-95"
+          className="mt-8 px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-800 transition duration-300 ease-in-out transform hover:scale-105 active:scale-95"
         >
           홈으로 돌아가기
         </button>
