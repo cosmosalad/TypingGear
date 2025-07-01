@@ -1,19 +1,19 @@
 {
   "files": {
-    "main.css": "/TypingGear/static/css/main.06b45455.css",
-    "main.js": "/TypingGear/static/js/main.6f9361ef.js",
+    "main.css": "/TypingGear/static/css/main.11ab1a90.css",
+    "main.js": "/TypingGear/static/js/main.5eb877c8.js",
     "static/js/436.cfac012e.chunk.js": "/TypingGear/static/js/436.cfac012e.chunk.js",
     "static/js/863.5aaa450f.chunk.js": "/TypingGear/static/js/863.5aaa450f.chunk.js",
     "static/js/554.760b3996.chunk.js": "/TypingGear/static/js/554.760b3996.chunk.js",
     "static/js/153.8d2554bd.chunk.js": "/TypingGear/static/js/153.8d2554bd.chunk.js",
     "static/js/453.d2573747.chunk.js": "/TypingGear/static/js/453.d2573747.chunk.js",
     "index.html": "/TypingGear/index.html",
-    "main.06b45455.css.map": "/TypingGear/static/css/main.06b45455.css.map",
-    "main.6f9361ef.js.map": "/TypingGear/static/js/main.6f9361ef.js.map",
+    "main.11ab1a90.css.map": "/TypingGear/static/css/main.11ab1a90.css.map",
+    "main.5eb877c8.js.map": "/TypingGear/static/js/main.5eb877c8.js.map",
     "453.d2573747.chunk.js.map": "/TypingGear/static/js/453.d2573747.chunk.js.map"
   },
   "entrypoints": [
-    "static/css/main.06b45455.css",
-    "static/js/main.6f9361ef.js"
+    "static/css/main.11ab1a90.css",
+    "static/js/main.5eb877c8.js"
   ]
 }
