@@ -22,15 +22,12 @@ const TypingSession = () => {
   const [correctCharacters, setCorrectCharacters] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [isCompleted, setIsCompleted] = useState(false);
-
-  // 1. (추가) 연속 정타 단어 카운트를 위한 state
   const [consecutiveCorrectWords, setConsecutiveCorrectWords] = useState(0);
 
-  const gearSystemRef = useRef(null);
+  // 1. 완료된 단어들을 저장할 state 추가
+  const [completedWords, setCompletedWords] = useState([]);
 
-  // 2. (삭제) 기존의 기어 드랍을 실행시키던 useEffect는 삭제합니다.
-  /* useEffect(() => { ... }, [completedCount, mode]); 
-  */
+  const gearSystemRef = useRef(null);
 
   const handleLanguageToggle = useCallback(() => {
     const newLanguage = language === 'en' ? 'kr' : 'en';
@@ -40,6 +37,7 @@ const TypingSession = () => {
     resetPractice();
   }, [language]);
 
+  // 2. resetPractice 함수 수정
   const resetPractice = useCallback(() => {
     setUserInput('');
     setStartTime(null);
@@ -51,7 +49,8 @@ const TypingSession = () => {
     setTotalCharacters(0);
     setCorrectCharacters(0);
     setIsCompleted(false);
-    setConsecutiveCorrectWords(0); // 연속 카운트도 리셋
+    setConsecutiveCorrectWords(0);
+    setCompletedWords([]); // ✅ 추가
   }, []);
 
   const getRandomText = useCallback((excludeCurrent = true) => {
@@ -138,16 +137,25 @@ const TypingSession = () => {
     return count;
   }, []);
 
+  // 3. calculateCPM 함수 완전히 교체
   const calculateCPM = useCallback(() => {
     if (startTime) {
       const now = Date.now();
       const timeElapsed = (now - startTime) / 60000;
       let characters = 0;
+
       if (mode === 'words') {
+        // 완료된 단어들의 실제 길이 합산
         let completedWordsChars = 0;
-        for (let i = 0; i < completedCount; i++) {
-          completedWordsChars += 5;
+        for (const word of completedWords) {
+          if (language === 'kr') {
+            completedWordsChars += countKoreanCharacters(word);
+          } else {
+            completedWordsChars += word.length;
+          }
         }
+
+        // 현재 입력 중인 단어 추가
         if (language === 'kr') {
           characters = completedWordsChars + countKoreanCharacters(userInput);
         } else {
@@ -163,7 +171,7 @@ const TypingSession = () => {
       return timeElapsed > 0 ? Math.round(characters / timeElapsed) : 0;
     }
     return 0;
-  }, [startTime, userInput, language, countKoreanCharacters, mode, completedCount]);
+  }, [startTime, userInput, language, countKoreanCharacters, mode, completedWords]); // ✅ completedWords 추가
 
   const calculateAccuracy = useCallback(() => {
     if (mode === 'words') {
@@ -191,36 +199,37 @@ const TypingSession = () => {
     }
   }, [calculateCPM, calculateAccuracy, startTime, isCompleted]);
 
-  // 3. (수정) 다음 텍스트로 넘어갈 때의 로직 수정
+  // 4. moveToNextText 함수에서 완료된 단어 저장
+  // 7. moveToNextText의 dependencies 배열 업데이트
   const moveToNextText = useCallback(() => {
     const isCorrect = userInput === currentText;
 
-    // --- 기어 생성 로직 ---
     if (isCorrect) {
       if (mode === 'words') {
         const newConsecutiveCount = consecutiveCorrectWords + 1;
         if (newConsecutiveCount >= 10) {
           gearSystemRef.current?.addGear();
-          setConsecutiveCorrectWords(0); // 10개 채우면 리셋
+          setConsecutiveCorrectWords(0);
         } else {
           setConsecutiveCorrectWords(newConsecutiveCount);
         }
-      } else { // 문장 모드
+      } else {
         gearSystemRef.current?.addGear();
       }
     } else {
-      // 틀렸을 경우, 단어 모드에서 연속 카운트 리셋
       if (mode === 'words') {
         setConsecutiveCorrectWords(0);
       }
     }
-    // --- 기어 생성 로직 끝 ---
 
     const newCompletedCount = completedCount + 1;
     const currentCpm = calculateCPM();
     const finalCpm = mode === 'words' ? currentCpm : cpm;
 
     if (mode === 'words' && currentText) {
+      // 완료된 단어 목록에 추가
+      setCompletedWords(prev => [...prev, currentText]);
+
       const wordLength = language === 'kr' ? countKoreanCharacters(currentText) : currentText.length;
       setTotalCharacters(prev => prev + wordLength);
       if (isCorrect) {
@@ -256,7 +265,7 @@ const TypingSession = () => {
   }, [
     mode, wordTarget, nextText, getRandomText, setNextRandomText, cpm, accuracy,
     completedCount, calculateCPM, currentText, userInput, language,
-    countKoreanCharacters, calculateAccuracy, consecutiveCorrectWords
+    countKoreanCharacters, calculateAccuracy, consecutiveCorrectWords, completedWords
   ]);
 
   const handleModeChange = useCallback((newMode) => {
@@ -277,6 +286,72 @@ const TypingSession = () => {
     }
   }, [startTime, currentText]);
 
+  // 6. checkCompletion 함수도 수정
+  const checkCompletion = useCallback(() => {
+    if (currentText && (userInput === currentText || userInput.length === currentText.length)) {
+      const currentWordLength = language === 'kr' ? countKoreanCharacters(currentText) : currentText.length;
+      if (mode === 'words' && startTime) {
+        const now = Date.now();
+        const timeElapsed = (now - startTime) / 60000;
+        
+        // 완료된 단어들의 실제 길이 합산
+        let completedWordsChars = 0;
+        for (const word of completedWords) {
+            completedWordsChars += language === 'kr' ? countKoreanCharacters(word) : word.length;
+        }
+        let totalChars = completedWordsChars + currentWordLength;
+
+        const newCpm = timeElapsed > 0 ? Math.round(totalChars / timeElapsed) : 0;
+        setCpm(newCpm);
+      }
+      moveToNextText();
+      return true;
+    }
+    return false;
+  }, [userInput, currentText, moveToNextText, language, countKoreanCharacters, mode, startTime, completedWords]);
+
+
+  // 5. handleKeyDown 함수의 CPM 계산 부분 수정
+  const handleKeyDown = useCallback((e) => {
+    if (e.key === '-') {
+      e.preventDefault();
+      gearSystemRef.current?.addGear();
+      return;
+    }
+
+    if (e.key === 'Enter' || (e.key === ' ' && mode === 'words')) {
+        e.preventDefault();
+        if (startTime) {
+            const now = Date.now();
+            const timeElapsed = (now - startTime) / 60000;
+            
+            // 완료된 단어들의 실제 길이 합산
+            let completedWordsChars = 0;
+            for (const word of completedWords) {
+                completedWordsChars += language === 'kr' ? countKoreanCharacters(word) : word.length;
+            }
+            let totalChars = completedWordsChars;
+
+            if (currentText && (userInput === currentText || userInput.length === currentText.length)) {
+                totalChars += (language === 'kr' ? countKoreanCharacters(currentText) : currentText.length) + (e.key === ' ' ? 1 : 0);
+            } else {
+                totalChars += (language === 'kr' ? countKoreanCharacters(userInput) : userInput.length) + (e.key === ' ' ? 1 : 0);
+            }
+            const newCpm = timeElapsed > 0 ? Math.round(totalChars / timeElapsed) : 0;
+            setCpm(newCpm);
+        }
+        checkCompletion();
+    } else if (e.key === ' ' && mode === 'sentences' && (userInput === currentText || userInput.length === currentText.length)) {
+        e.preventDefault();
+        checkCompletion();
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      setUserInput('');
+    }
+  }, [checkCompletion, mode, userInput, currentText, startTime, completedWords, language, countKoreanCharacters]);
+  
+  // (Rest of the component remains the same)
+  // ...
   const findCurrentWordBoundaries = useCallback((text, cursorIndex) => {
     if (!text || typeof text !== 'string') return { start: 0, end: 0 };
     let start = cursorIndex;
@@ -379,73 +454,6 @@ const TypingSession = () => {
     );
   }, [mode, nextText]);
 
-  const checkCompletion = useCallback(() => {
-    if (currentText && (userInput === currentText || userInput.length === currentText.length)) {
-      const currentWordLength = language === 'kr' ? countKoreanCharacters(currentText) : currentText.length;
-      if (mode === 'words' && startTime) {
-        const now = Date.now();
-        const timeElapsed = (now - startTime) / 60000;
-        let totalChars = completedCount * 5 + currentWordLength;
-        const newCpm = timeElapsed > 0 ? Math.round(totalChars / timeElapsed) : 0;
-        setCpm(newCpm);
-      }
-      moveToNextText();
-      return true;
-    }
-    return false;
-  }, [userInput, currentText, moveToNextText, language, countKoreanCharacters, mode, startTime, completedCount]);
-
-  const handleKeyDown = useCallback((e) => {
-
-    // --- 테스트용 코드 시작: '-' 키로 기어 생성 (나중에 이 블록을 지우세요) ---
-    if (e.key === '-') {
-      e.preventDefault(); // 입력창에 '-'가 쳐지는 것을 막습니다.
-      gearSystemRef.current?.addGear();
-      return; // 다른 키보드 로직이 실행되지 않도록 여기서 종료합니다.
-    }
-    // --- 테스트용 코드 끝 ---
-
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      if (mode === 'words' && startTime) {
-        const now = Date.now();
-        const timeElapsed = (now - startTime) / 60000;
-        let totalChars = completedCount * 5;
-        if (currentText && (userInput === currentText || userInput.length === currentText.length)) {
-          totalChars += (language === 'kr' ? countKoreanCharacters(currentText) : currentText.length) + 1;
-        } else {
-          totalChars += (language === 'kr' ? countKoreanCharacters(userInput) : userInput.length) + 1;
-        }
-        const newCpm = timeElapsed > 0 ? Math.round(totalChars / timeElapsed) : 0;
-        setCpm(newCpm);
-      }
-      checkCompletion();
-    } else if (e.key === ' ') {
-      if (mode === 'words') {
-        e.preventDefault();
-        if (startTime) {
-          const now = Date.now();
-          const timeElapsed = (now - startTime) / 60000;
-          let totalChars = completedCount * 5;
-          if (currentText && (userInput === currentText || userInput.length === currentText.length)) {
-            totalChars += (language === 'kr' ? countKoreanCharacters(currentText) : currentText.length) + 1;
-          } else {
-            totalChars += (language === 'kr' ? countKoreanCharacters(userInput) : userInput.length) + 1;
-          }
-          const newCpm = timeElapsed > 0 ? Math.round(totalChars / timeElapsed) : 0;
-          setCpm(newCpm);
-        }
-        checkCompletion();
-      } else if (mode === 'sentences' && (userInput === currentText || userInput.length === currentText.length)) {
-        e.preventDefault();
-        checkCompletion();
-      }
-    } else if (e.key === 'Escape') {
-      e.preventDefault();
-      setUserInput('');
-    }
-  }, [checkCompletion, mode, userInput, currentText, startTime, completedCount, language, countKoreanCharacters]);
-
   const handleContainerClick = useCallback((e) => {
     if (e.target.tagName === 'BUTTON' || e.target.tagName === 'INPUT') {
       return;
@@ -487,14 +495,12 @@ return (
             <div className="flex space-x-4 text-lg font-semibold">
               <span className="text-gray-700">현재: {cpm} CPM</span>
               
-              {/* '단어' 모드가 아닐 때만 정확도 표시 */}
               {mode !== 'words' && <span className="text-gray-600">정확도: {accuracy}%</span>}
               
               {previousCpm > 0 && (
                 <span className="text-gray-500">이전: {previousCpm} CPM</span>
               )}
 
-              {/* '단어' 모드가 아닐 때만 이전 정확도 표시 */}
               {mode !== 'words' && previousAccuracy < 100 && (
                 <span className="text-gray-500">이전 정확도: {previousAccuracy}%</span>
               )}
@@ -629,7 +635,6 @@ return (
               }
             </span>
             <div className="flex space-x-4">
-              {/* (추가) 연속 정타 단어 개수 표시 UI */}
               {mode === 'words' && <span className="text-sm text-gray-500">연속 정타: {consecutiveCorrectWords}개</span>}
               <span className="text-sm text-gray-500">
                 {typingMode === 'basic' ? '기본 모드' : '겹쳐모드'}
