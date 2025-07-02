@@ -93,13 +93,26 @@ const GearSVG = React.memo(({ gear }) => {
 
 const GearSystem = forwardRef((props, ref) => {
   const sceneRef = useRef(null);
-  const engineRef = useRef(Matter.Engine.create());
+  const engineRef = useRef(null); // null로 초기화
+  const runnerRef = useRef(null); // runner도 ref로 관리
   const [gears, setGears] = useState([]);
   const bodiesRef = useRef(new Map());
+  const animationFrameRef = useRef(null);
 
   useEffect(() => {
+    // 엔진이 없으면 새로 생성
+    if (!engineRef.current) {
+      engineRef.current = Matter.Engine.create();
+    }
+    
     const engine = engineRef.current;
     const container = sceneRef.current;
+    
+    // 이미 초기화되었다면 건너뛰기
+    if (engine.world.bodies.length > 3) { // ground, leftWall, rightWall = 3개
+      return;
+    }
+    
     engine.world.gravity.y = 0.6;
 
     const ground = Matter.Bodies.rectangle(container.clientWidth / 2, container.clientHeight + 60, container.clientWidth, 120, { isStatic: true });
@@ -107,10 +120,11 @@ const GearSystem = forwardRef((props, ref) => {
     const rightWall = Matter.Bodies.rectangle(container.clientWidth + 60, container.clientHeight / 2, 120, container.clientHeight, { isStatic: true });
     Matter.World.add(engine.world, [ground, leftWall, rightWall]);
 
-    const runner = Matter.Runner.create();
-    Matter.Runner.run(runner, engine);
+    if (!runnerRef.current) {
+      runnerRef.current = Matter.Runner.create();
+      Matter.Runner.run(runnerRef.current, engine);
+    }
 
-    let animationFrameId;
     const gameLoop = () => {
       const updatedGears = [];
       for (const gear of bodiesRef.current.values()) {
@@ -128,16 +142,18 @@ const GearSystem = forwardRef((props, ref) => {
         }
       }
       setGears(updatedGears);
-      animationFrameId = requestAnimationFrame(gameLoop);
+      animationFrameRef.current = requestAnimationFrame(gameLoop);
     };
-    gameLoop();
+    
+    if (!animationFrameRef.current) {
+      gameLoop();
+    }
 
     return () => {
-      cancelAnimationFrame(animationFrameId);
-      Matter.Runner.stop(runner);
-      Matter.World.clear(engine.world);
-      Matter.Engine.clear(engine);
-      bodiesRef.current.clear();
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+        animationFrameRef.current = null;
+      }
     };
   }, []);
 
