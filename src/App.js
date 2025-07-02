@@ -1,12 +1,12 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { HashRouter as Router, Routes, Route } from 'react-router-dom';
 import PracticeHome from './components/PracticeHome';
 import TypingSession from './components/TypingSession';
 import './App.css';
 
 function App() {
   return (
-    <Router basename={process.env.PUBLIC_URL}>
+    <Router>
       <div className="App">
         <Routes>
           <Route path="/" element={<PracticeHome />} />
