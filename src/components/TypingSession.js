@@ -4,8 +4,12 @@ import GearSystem from './GearSystem';
 
 const TypingSession = () => {
   const navigate = useNavigate();
-  const [language, setLanguage] = useState('en');
-  const [mode, setMode] = useState('words');
+  
+  // S: Code Change - Load settings from localStorage or use default
+  const [language, setLanguage] = useState(() => localStorage.getItem('typingLanguage') || 'en');
+  const [mode, setMode] = useState(() => localStorage.getItem('typingMode') || 'words');
+  // E: Code Change
+
   const [wordTarget, setWordTarget] = useState(30);
   const [typingMode, setTypingMode] = useState('basic');
   const [allTexts, setAllTexts] = useState([]);
@@ -23,11 +27,19 @@ const TypingSession = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isCompleted, setIsCompleted] = useState(false);
   const [consecutiveCorrectWords, setConsecutiveCorrectWords] = useState(0);
-
-  // 1. 완료된 단어들을 저장할 state 추가
   const [completedWords, setCompletedWords] = useState([]);
 
   const gearSystemRef = useRef(null);
+
+  // S: Code Change - Save settings to localStorage whenever they change
+  useEffect(() => {
+    localStorage.setItem('typingLanguage', language);
+  }, [language]);
+
+  useEffect(() => {
+    localStorage.setItem('typingMode', mode);
+  }, [mode]);
+  // E: Code Change
 
   const handleLanguageToggle = useCallback(() => {
     const newLanguage = language === 'en' ? 'kr' : 'en';
@@ -37,7 +49,6 @@ const TypingSession = () => {
     resetPractice();
   }, [language]);
 
-  // 2. resetPractice 함수 수정
   const resetPractice = useCallback(() => {
     setUserInput('');
     setStartTime(null);
@@ -50,7 +61,7 @@ const TypingSession = () => {
     setCorrectCharacters(0);
     setIsCompleted(false);
     setConsecutiveCorrectWords(0);
-    setCompletedWords([]); // ✅ 추가
+    setCompletedWords([]);
   }, []);
 
   const getRandomText = useCallback((excludeCurrent = true) => {
@@ -137,7 +148,6 @@ const TypingSession = () => {
     return count;
   }, []);
 
-  // 3. calculateCPM 함수 완전히 교체
   const calculateCPM = useCallback(() => {
     if (startTime) {
       const now = Date.now();
@@ -145,7 +155,6 @@ const TypingSession = () => {
       let characters = 0;
 
       if (mode === 'words') {
-        // 완료된 단어들의 실제 길이 합산
         let completedWordsChars = 0;
         for (const word of completedWords) {
           if (language === 'kr') {
@@ -154,8 +163,6 @@ const TypingSession = () => {
             completedWordsChars += word.length;
           }
         }
-
-        // 현재 입력 중인 단어 추가
         if (language === 'kr') {
           characters = completedWordsChars + countKoreanCharacters(userInput);
         } else {
@@ -171,7 +178,7 @@ const TypingSession = () => {
       return timeElapsed > 0 ? Math.round(characters / timeElapsed) : 0;
     }
     return 0;
-  }, [startTime, userInput, language, countKoreanCharacters, mode, completedWords]); // ✅ completedWords 추가
+  }, [startTime, userInput, language, countKoreanCharacters, mode, completedWords]);
 
   const calculateAccuracy = useCallback(() => {
     if (mode === 'words') {
@@ -199,8 +206,6 @@ const TypingSession = () => {
     }
   }, [calculateCPM, calculateAccuracy, startTime, isCompleted]);
 
-  // 4. moveToNextText 함수에서 완료된 단어 저장
-  // 7. moveToNextText의 dependencies 배열 업데이트
   const moveToNextText = useCallback(() => {
     const isCorrect = userInput === currentText;
 
@@ -227,7 +232,6 @@ const TypingSession = () => {
     const finalCpm = mode === 'words' ? currentCpm : cpm;
 
     if (mode === 'words' && currentText) {
-      // 완료된 단어 목록에 추가
       setCompletedWords(prev => [...prev, currentText]);
 
       const wordLength = language === 'kr' ? countKoreanCharacters(currentText) : currentText.length;
@@ -265,7 +269,7 @@ const TypingSession = () => {
   }, [
     mode, wordTarget, nextText, getRandomText, setNextRandomText, cpm, accuracy,
     completedCount, calculateCPM, currentText, userInput, language,
-    countKoreanCharacters, calculateAccuracy, consecutiveCorrectWords, completedWords
+    countKoreanCharacters, calculateAccuracy, consecutiveCorrectWords
   ]);
 
   const handleModeChange = useCallback((newMode) => {
@@ -286,7 +290,6 @@ const TypingSession = () => {
     }
   }, [startTime, currentText]);
 
-  // 6. checkCompletion 함수도 수정
   const checkCompletion = useCallback(() => {
     if (currentText && (userInput === currentText || userInput.length === currentText.length)) {
       const currentWordLength = language === 'kr' ? countKoreanCharacters(currentText) : currentText.length;
@@ -294,7 +297,6 @@ const TypingSession = () => {
         const now = Date.now();
         const timeElapsed = (now - startTime) / 60000;
         
-        // 완료된 단어들의 실제 길이 합산
         let completedWordsChars = 0;
         for (const word of completedWords) {
             completedWordsChars += language === 'kr' ? countKoreanCharacters(word) : word.length;
@@ -311,7 +313,6 @@ const TypingSession = () => {
   }, [userInput, currentText, moveToNextText, language, countKoreanCharacters, mode, startTime, completedWords]);
 
 
-  // 5. handleKeyDown 함수의 CPM 계산 부분 수정
   const handleKeyDown = useCallback((e) => {
     if (e.key === '-') {
       e.preventDefault();
@@ -325,7 +326,6 @@ const TypingSession = () => {
             const now = Date.now();
             const timeElapsed = (now - startTime) / 60000;
             
-            // 완료된 단어들의 실제 길이 합산
             let completedWordsChars = 0;
             for (const word of completedWords) {
                 completedWordsChars += language === 'kr' ? countKoreanCharacters(word) : word.length;
@@ -350,8 +350,6 @@ const TypingSession = () => {
     }
   }, [checkCompletion, mode, userInput, currentText, startTime, completedWords, language, countKoreanCharacters]);
   
-  // (Rest of the component remains the same)
-  // ...
   const findCurrentWordBoundaries = useCallback((text, cursorIndex) => {
     if (!text || typeof text !== 'string') return { start: 0, end: 0 };
     let start = cursorIndex;
@@ -448,7 +446,7 @@ const TypingSession = () => {
   const renderNextWord = useCallback(() => {
     if (mode !== 'words' || !nextText) return null;
     return (
-      <span className="text-gray-400 text-xl ml-4 opacity-50">
+      <span className="text-gray-400 text-2xl ml-4 opacity-50">
         {nextText}
       </span>
     );
@@ -590,31 +588,33 @@ return (
             </div>
           </div>
 
-          <div className="mb-6 text-2xl leading-relaxed bg-white p-6 rounded-lg shadow flex items-center whitespace-pre-wrap transition-all duration-500 ease-out border border-gray-200">
-            {renderCurrentText()}
-            {renderNextWord()}
-          </div>
+          {/* S: Code Change - Unified display box */}
+          <div className="mb-6 bg-white p-6 rounded-lg shadow border border-gray-200">
+            {/* Typing display area */}
+            <div className="text-2xl leading-relaxed flex items-center whitespace-pre-wrap min-h-[3rem]">
+              {renderCurrentText()}
+              {renderNextWord()}
+            </div>
 
-          <div className={`transition-all duration-500 ease-out ${
-            typingMode !== 'overlay'
-              ? 'opacity-100 transform translate-y-0 mb-4'
-              : 'opacity-0 transform translate-y-4 h-0 overflow-hidden'
-          }`}>
+            {/* Input field for basic mode */}
             {typingMode !== 'overlay' && (
-              <div className="relative w-full">
-                <div className="absolute inset-0 bg-white border-2 border-gray-300 rounded-lg shadow"></div>
-                <input
-                  type="text"
-                  value={userInput}
-                  onChange={handleInputChange}
-                  onKeyDown={handleKeyDown}
-                  className="relative w-full p-4 text-xl bg-transparent focus:outline-none focus:border-gray-500 transition-all duration-300"
-                  placeholder={mode === 'words' ? "단어를 입력하고 스페이스바나 엔터를 누르세요..." : "문장을 입력하고 엔터를 누르세요..."}
-                  autoFocus
-                />
-              </div>
+              <>
+                <hr className="my-4 border-gray-200" />
+                <div className="relative w-full">
+                  <input
+                    type="text"
+                    value={userInput}
+                    onChange={handleInputChange}
+                    onKeyDown={handleKeyDown}
+                    className="w-full text-2xl bg-transparent focus:outline-none placeholder-gray-400"
+                    placeholder={mode === 'words' ? "단어를 입력하고 스페이스바나 엔터를 누르세요..." : "문장을 입력하고 엔터를 누르세요..."}
+                    autoFocus
+                  />
+                </div>
+              </>
             )}
           </div>
+          {/* E: Code Change */}
 
           {typingMode === 'overlay' && (
             <input
