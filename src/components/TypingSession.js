@@ -1,15 +1,14 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import GearSystem from './GearSystem';
 
 const TypingSession = () => {
   const navigate = useNavigate();
   
-  // S: Code Change - Load settings from localStorage or use default
   const [language, setLanguage] = useState(() => localStorage.getItem('typingLanguage') || 'en');
   const [mode, setMode] = useState(() => localStorage.getItem('typingMode') || 'words');
-  // E: Code Change
-
+  const [timeTarget, setTimeTarget] = useState(30);
+  const [timeLeft, setTimeLeft] = useState(30);
   const [wordTarget, setWordTarget] = useState(30);
   const [typingMode, setTypingMode] = useState('basic');
   const [allTexts, setAllTexts] = useState([]);
@@ -30,8 +29,9 @@ const TypingSession = () => {
   const [completedWords, setCompletedWords] = useState([]);
 
   const gearSystemRef = useRef(null);
+  const basicInputRef = useRef(null);
+  const overlayInputRef = useRef(null);
 
-  // S: Code Change - Save settings to localStorage whenever they change
   useEffect(() => {
     localStorage.setItem('typingLanguage', language);
   }, [language]);
@@ -39,13 +39,20 @@ const TypingSession = () => {
   useEffect(() => {
     localStorage.setItem('typingMode', mode);
   }, [mode]);
-  // E: Code Change
+
+  useEffect(() => {
+    if (isCompleted) return;
+
+    if (typingMode === 'overlay') {
+      overlayInputRef.current?.focus();
+    } else {
+      basicInputRef.current?.focus();
+    }
+  }, [typingMode, isLoading, isCompleted]);
 
   const handleLanguageToggle = useCallback(() => {
     const newLanguage = language === 'en' ? 'kr' : 'en';
     setLanguage(newLanguage);
-    setCurrentText('');
-    setNextText('');
     resetPractice();
   }, [language]);
 
@@ -62,7 +69,10 @@ const TypingSession = () => {
     setIsCompleted(false);
     setConsecutiveCorrectWords(0);
     setCompletedWords([]);
-  }, []);
+    if (mode === 'time') {
+      setTimeLeft(timeTarget);
+    }
+  }, [mode, timeTarget]);
 
   const getRandomText = useCallback((excludeCurrent = true) => {
     if (allTexts.length === 0) return '';
@@ -84,14 +94,15 @@ const TypingSession = () => {
   }, [getRandomText]);
 
   useEffect(() => {
-    if (language && mode) {
+    const dataFile = mode === 'time' ? 'words' : mode;
+    if (language && dataFile) {
       setIsLoading(true);
-      import(`../data/${language}/${mode}.json`)
+      import(`../data/${language}/${dataFile}.json`)
         .then(module => {
           const categories = module.default.categories;
           let texts = [];
           categories.forEach(category => {
-            if (mode === 'sentences') {
+            if (dataFile === 'sentences') {
               if (category.sentences && Array.isArray(category.sentences)) {
                 texts = texts.concat(category.sentences);
               }
@@ -104,12 +115,12 @@ const TypingSession = () => {
           setAllTexts(texts);
           if (texts.length > 0) {
             const randomIndex = Math.floor(Math.random() * texts.length);
-            const firstText = mode === 'sentences' ? texts[randomIndex].text : texts[randomIndex];
+            const firstText = dataFile === 'sentences' ? texts[randomIndex].text : texts[randomIndex];
             setCurrentText(firstText);
-            if (mode === 'words' && texts.length > 1) {
+            if (dataFile !== 'sentences' && texts.length > 1) {
               const nextRandomIndex = (randomIndex + 1) % texts.length;
               setNextText(texts[nextRandomIndex]);
-            } else if (mode === 'sentences' && texts.length > 1) {
+            } else if (dataFile === 'sentences' && texts.length > 1) {
               const nextRandomIndex = (randomIndex + 1) % texts.length;
               setNextText(texts[nextRandomIndex].text);
             }
@@ -129,6 +140,27 @@ const TypingSession = () => {
       setNextRandomText();
     }
   }, [allTexts, currentText, setNextRandomText]);
+
+    useEffect(() => {
+        if (mode === 'time' && startTime && !isCompleted) {
+            setTimeLeft(timeTarget); 
+            const timer = setInterval(() => {
+                setTimeLeft(prevTime => {
+                    if (prevTime <= 1) {
+                        clearInterval(timer);
+                        setIsCompleted(true);
+                        const finalAccuracy = calculateAccuracy();
+                        setAccuracy(finalAccuracy);
+                        setPreviousAccuracy(finalAccuracy);
+                        setPreviousCpm(completedCount);
+                        return 0;
+                    }
+                    return prevTime - 1;
+                });
+            }, 1000);
+            return () => clearInterval(timer);
+        }
+    }, [mode, startTime, isCompleted, timeTarget]);
 
   const countKoreanCharacters = useCallback((text) => {
     if (!text || typeof text !== 'string') return 0;
@@ -152,36 +184,26 @@ const TypingSession = () => {
     if (startTime) {
       const now = Date.now();
       const timeElapsed = (now - startTime) / 60000;
-      let characters = 0;
+      if (timeElapsed === 0) return 0;
 
-      if (mode === 'words') {
+      if (mode === 'words' || mode === 'time') {
         let completedWordsChars = 0;
         for (const word of completedWords) {
-          if (language === 'kr') {
-            completedWordsChars += countKoreanCharacters(word);
-          } else {
-            completedWordsChars += word.length;
-          }
+            completedWordsChars += language === 'kr' ? countKoreanCharacters(word) : word.length;
         }
-        if (language === 'kr') {
-          characters = completedWordsChars + countKoreanCharacters(userInput);
-        } else {
-          characters = completedWordsChars + userInput.length;
-        }
+        const currentChars = language === 'kr' ? countKoreanCharacters(userInput) : userInput.length;
+        const totalChars = completedWordsChars + currentChars;
+        return Math.round(totalChars / timeElapsed);
       } else {
-        if (language === 'kr') {
-          characters = countKoreanCharacters(userInput);
-        } else {
-          characters = userInput.length;
-        }
+        const characters = language === 'kr' ? countKoreanCharacters(userInput) : userInput.length;
+        return Math.round(characters / timeElapsed);
       }
-      return timeElapsed > 0 ? Math.round(characters / timeElapsed) : 0;
     }
     return 0;
   }, [startTime, userInput, language, countKoreanCharacters, mode, completedWords]);
 
   const calculateAccuracy = useCallback(() => {
-    if (mode === 'words') {
+    if (mode === 'words' || mode === 'time') {
       if (totalCharacters === 0) return 100;
       return Math.round((correctCharacters / totalCharacters) * 100);
     } else {
@@ -197,20 +219,22 @@ const TypingSession = () => {
   }, [mode, totalCharacters, correctCharacters, userInput, currentText]);
 
   useEffect(() => {
-    if (startTime && !isCompleted) {
+    if (startTime && !isCompleted && mode !== 'time') {
       const interval = setInterval(() => {
         setCpm(calculateCPM());
-        setAccuracy(calculateAccuracy());
+        if (mode !== 'words') {
+          setAccuracy(calculateAccuracy());
+        }
       }, 100);
       return () => clearInterval(interval);
     }
-  }, [calculateCPM, calculateAccuracy, startTime, isCompleted]);
+  }, [calculateCPM, calculateAccuracy, startTime, isCompleted, mode]);
 
   const moveToNextText = useCallback(() => {
     const isCorrect = userInput === currentText;
 
     if (isCorrect) {
-      if (mode === 'words') {
+      if (mode !== 'sentences') {
         const newConsecutiveCount = consecutiveCorrectWords + 1;
         if (newConsecutiveCount >= 10) {
           gearSystemRef.current?.addGear();
@@ -222,18 +246,15 @@ const TypingSession = () => {
         gearSystemRef.current?.addGear();
       }
     } else {
-      if (mode === 'words') {
+      if (mode !== 'sentences') {
         setConsecutiveCorrectWords(0);
       }
     }
 
     const newCompletedCount = completedCount + 1;
-    const currentCpm = calculateCPM();
-    const finalCpm = mode === 'words' ? currentCpm : cpm;
 
-    if (mode === 'words' && currentText) {
+    if ((mode === 'words' || mode === 'time') && currentText) {
       setCompletedWords(prev => [...prev, currentText]);
-
       const wordLength = language === 'kr' ? countKoreanCharacters(currentText) : currentText.length;
       setTotalCharacters(prev => prev + wordLength);
       if (isCorrect) {
@@ -242,14 +263,17 @@ const TypingSession = () => {
     }
 
     if (mode === 'words' && newCompletedCount >= wordTarget) {
+      const finalCpm = calculateCPM();
+      const finalAccuracy = calculateAccuracy();
       setPreviousCpm(finalCpm);
-      setPreviousAccuracy(calculateAccuracy());
+      setPreviousAccuracy(finalAccuracy);
       setCpm(finalCpm);
+      setAccuracy(finalAccuracy);
       setIsCompleted(true);
       return;
     }
 
-    if (mode === 'words') {
+    if (mode !== 'sentences') {
       if (nextText) {
         setCurrentText(nextText);
         setNextRandomText();
@@ -257,8 +281,10 @@ const TypingSession = () => {
       setUserInput('');
       setCompletedCount(newCompletedCount);
     } else {
+      const finalCpm = cpm;
+      const finalAccuracy = accuracy;
       setPreviousCpm(finalCpm);
-      setPreviousAccuracy(accuracy);
+      setPreviousAccuracy(finalAccuracy);
       const newCurrentText = getRandomText(true);
       setCurrentText(newCurrentText);
       setUserInput('');
@@ -275,42 +301,34 @@ const TypingSession = () => {
   const handleModeChange = useCallback((newMode) => {
     if (newMode === mode) return;
     setMode(newMode);
-    setCurrentText('');
-    setNextText('');
     resetPractice();
   }, [resetPractice, mode]);
 
   const handleInputChange = useCallback((e) => {
     const input = e.target.value;
+    if (mode === 'sentences') {
+        if (!startTime && input.length > 0) {
+            setStartTime(Date.now());
+        }
+        setUserInput(input);
+        return;
+    }
+
     if (currentText && input.length <= currentText.length) {
       if (!startTime && input.length > 0) {
         setStartTime(Date.now());
       }
       setUserInput(input);
     }
-  }, [startTime, currentText]);
+  }, [startTime, currentText, mode]);
 
   const checkCompletion = useCallback(() => {
-    if (currentText && (userInput === currentText || userInput.length === currentText.length)) {
-      const currentWordLength = language === 'kr' ? countKoreanCharacters(currentText) : currentText.length;
-      if (mode === 'words' && startTime) {
-        const now = Date.now();
-        const timeElapsed = (now - startTime) / 60000;
-        
-        let completedWordsChars = 0;
-        for (const word of completedWords) {
-            completedWordsChars += language === 'kr' ? countKoreanCharacters(word) : word.length;
-        }
-        let totalChars = completedWordsChars + currentWordLength;
-
-        const newCpm = timeElapsed > 0 ? Math.round(totalChars / timeElapsed) : 0;
-        setCpm(newCpm);
-      }
-      moveToNextText();
-      return true;
+    if (currentText && ((mode !== 'sentences' && userInput.length >= currentText.length) || (userInput === currentText))) {
+        moveToNextText();
+        return true;
     }
     return false;
-  }, [userInput, currentText, moveToNextText, language, countKoreanCharacters, mode, startTime, completedWords]);
+  }, [userInput, currentText, moveToNextText, mode]);
 
 
   const handleKeyDown = useCallback((e) => {
@@ -320,35 +338,16 @@ const TypingSession = () => {
       return;
     }
 
-    if (e.key === 'Enter' || (e.key === ' ' && mode === 'words')) {
-        e.preventDefault();
-        if (startTime) {
-            const now = Date.now();
-            const timeElapsed = (now - startTime) / 60000;
-            
-            let completedWordsChars = 0;
-            for (const word of completedWords) {
-                completedWordsChars += language === 'kr' ? countKoreanCharacters(word) : word.length;
-            }
-            let totalChars = completedWordsChars;
+    const isWordOrTimeMode = mode === 'words' || mode === 'time';
 
-            if (currentText && (userInput === currentText || userInput.length === currentText.length)) {
-                totalChars += (language === 'kr' ? countKoreanCharacters(currentText) : currentText.length) + (e.key === ' ' ? 1 : 0);
-            } else {
-                totalChars += (language === 'kr' ? countKoreanCharacters(userInput) : userInput.length) + (e.key === ' ' ? 1 : 0);
-            }
-            const newCpm = timeElapsed > 0 ? Math.round(totalChars / timeElapsed) : 0;
-            setCpm(newCpm);
-        }
-        checkCompletion();
-    } else if (e.key === ' ' && mode === 'sentences' && (userInput === currentText || userInput.length === currentText.length)) {
+    if ((e.key === 'Enter' && mode === 'sentences') || (e.key === ' ' && isWordOrTimeMode)) {
         e.preventDefault();
         checkCompletion();
     } else if (e.key === 'Escape') {
       e.preventDefault();
       setUserInput('');
     }
-  }, [checkCompletion, mode, userInput, currentText, startTime, completedWords, language, countKoreanCharacters]);
+  }, [checkCompletion, mode]);
   
   const findCurrentWordBoundaries = useCallback((text, cursorIndex) => {
     if (!text || typeof text !== 'string') return { start: 0, end: 0 };
@@ -427,7 +426,7 @@ const TypingSession = () => {
             }
           }
         }
-        if (mode === 'words' && index >= wordStart && index < wordEnd && index >= userInput.length) {
+        if (mode !== 'sentences' && index >= wordStart && index < wordEnd && index >= userInput.length) {
           underline = true;
         }
         const displayChar = char === ' ' ? '\u00A0' : char;
@@ -444,7 +443,7 @@ const TypingSession = () => {
   }, [currentText, userInput, language, mode, typingMode, findCurrentWordBoundaries]);
 
   const renderNextWord = useCallback(() => {
-    if (mode !== 'words' || !nextText) return null;
+    if (mode === 'sentences' || !nextText) return null;
     return (
       <span className="text-gray-400 text-2xl ml-4 opacity-50">
         {nextText}
@@ -456,11 +455,11 @@ const TypingSession = () => {
     if (e.target.tagName === 'BUTTON' || e.target.tagName === 'INPUT') {
       return;
     }
-    const inputElement = typingMode === 'overlay'
-      ? document.querySelector('input.opacity-0')
-      : document.querySelector('input[type="text"]');
-    if (inputElement) {
-      inputElement.focus();
+    
+    if (typingMode === 'overlay') {
+      overlayInputRef.current?.focus();
+    } else {
+      basicInputRef.current?.focus();
     }
   }, [typingMode]);
 
@@ -491,160 +490,137 @@ return (
         <div className="relative z-10 w-full max-w-4xl">
           <div className="mb-6 flex justify-between items-center">
             <div className="flex space-x-4 text-lg font-semibold">
-              <span className="text-gray-700">현재: {cpm} CPM</span>
-              
-              {mode !== 'words' && <span className="text-gray-600">정확도: {accuracy}%</span>}
-              
-              {previousCpm > 0 && (
-                <span className="text-gray-500">이전: {previousCpm} CPM</span>
-              )}
-
-              {mode !== 'words' && previousAccuracy < 100 && (
-                <span className="text-gray-500">이전 정확도: {previousAccuracy}%</span>
-              )}
+                {mode === 'time' && <span className="text-gray-700">남은 시간: {timeLeft}초</span>}
+                {mode === 'words' && <span className="text-gray-700">타수: {cpm} CPM</span>}
+                {mode === 'sentences' && <span className="text-gray-700">타수: {cpm} CPM</span>}
+                {mode !== 'time' && previousCpm > 0 && <span className="text-gray-500">이전: {previousCpm} CPM</span>}
             </div>
           </div>
 
-          <div className="mb-6 min-h-16">
-            <div className="flex justify-between items-center">
-              <div className="flex items-center space-x-4">
-                <button
-                  onClick={() => setTypingMode(typingMode === 'basic' ? 'overlay' : 'basic')}
-                  className="px-8 py-3 rounded-lg font-medium transition-all duration-300 ease-out bg-gray-700 text-white hover:bg-gray-800 shadow-lg transform hover:scale-105 active:scale-100 whitespace-nowrap min-w-[120px]"
-                >
-                  <span className="transition-all duration-300">
-                    {typingMode === 'basic' ? '기본모드' : '겹쳐모드'}
-                  </span>
-                </button>
+            {/* S: Code Change - New button layout */}
+            <div className="mb-6 min-h-16 flex justify-between items-center">
+                <div className="flex items-center space-x-4">
+                    <button
+                        onClick={() => setTypingMode(typingMode === 'basic' ? 'overlay' : 'basic')}
+                        className="px-6 py-3 rounded-lg font-medium transition-all duration-300 ease-out bg-gray-700 text-white hover:bg-gray-800 shadow-lg transform hover:scale-105 active:scale-100 whitespace-nowrap"
+                    >
+                        {typingMode === 'basic' ? '기본모드' : '겹쳐모드'}
+                    </button>
+                    <button
+                        onClick={handleLanguageToggle}
+                        className="w-[100px] h-[48px] rounded-lg font-medium transition-colors duration-150 ease-out bg-gray-500 text-white hover:bg-gray-600 shadow-md flex items-center justify-center"
+                    >
+                        {language === 'en' ? '🇺🇸 EN' : '🇰🇷 KR'}
+                    </button>
+                </div>
 
-                <button
-                  onClick={handleLanguageToggle}
-                  className="w-[100px] h-[48px] rounded-lg font-medium transition-colors duration-150 ease-out bg-gray-500 text-white hover:bg-gray-600 shadow-md flex items-center justify-center"
-                >
-                  {language === 'en' ? '🇺🇸 EN' : '🇰🇷 KR'}
-                </button>
-
-                <div className="w-64">
-                  {mode === 'sentences' && currentText && (
-                    <div className="bg-gray-100 px-4 py-2 rounded-lg border border-gray-200">
-                      <span className="text-sm text-gray-600 italic whitespace-nowrap overflow-hidden text-ellipsis block">
-                        # {(() => {
-                          const currentSentence = allTexts.find(item => item.text === currentText);
-                          return currentSentence ? currentSentence.source : '알 수 없음';
-                        })()}
-                      </span>
+                <div className="flex items-center space-x-2">
+                    {/* Main mode buttons as tabs */}
+                    <div className="flex items-center p-1 bg-gray-200 rounded-lg space-x-1">
+                        {['time', 'words', 'sentences'].map(modeName => (
+                            <button
+                                key={modeName}
+                                onClick={() => handleModeChange(modeName)}
+                                className={`px-4 h-10 rounded-md font-medium text-sm transition-all duration-200 ${
+                                    mode === modeName ? 'bg-white text-gray-800 shadow-sm' : 'bg-transparent text-gray-500 hover:bg-white/50'
+                                }`}
+                            >
+                                {modeName === 'time' && '시간'}
+                                {modeName === 'words' && '단어'}
+                                {modeName === 'sentences' && '문장'}
+                            </button>
+                        ))}
                     </div>
-                  )}
-                </div>
-              </div>
 
-              <div className="flex items-center w-[400px]">
-                <div className="flex space-x-2 justify-end w-[220px] h-[48px] items-center">
-                  <div className={`flex space-x-2 transition-opacity duration-200 ease-out ${
-                    mode === 'words' ? 'opacity-100' : 'opacity-0 pointer-events-none'
-                  }`}>
-                    {[30, 50, 100].map(target => (
-                      <button
-                        key={target}
-                        onClick={() => {
-                          setWordTarget(target);
-                          resetPractice();
-                        }}
-                        className={`w-[65px] h-[48px] rounded-lg font-medium transition-colors duration-150 ease-out flex items-center justify-center ${
-                          wordTarget === target
-                            ? 'bg-gray-600 text-white hover:bg-gray-700 shadow-md'
-                            : 'bg-gray-200 hover:bg-gray-300 text-gray-700'
-                        }`}
-                      >
-                        {target}개
-                      </button>
-                    ))}
-                  </div>
+                    {/* Animated container for sub-mode buttons */}
+                    <div className="relative h-[48px] w-[220px]">
+                        {/* Time Options */}
+                        <div className={`absolute inset-0 flex items-center justify-start space-x-2 transition-all duration-300 ease-in-out ${mode === 'time' ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-3 pointer-events-none'}`}>
+                            {[30, 60, 120].map(target => (
+                            <button
+                                key={`time-${target}`}
+                                onClick={() => { setTimeTarget(target); resetPractice(); }}
+                                className={`w-[65px] h-11 rounded-lg font-medium transition-colors duration-150 ease-out flex items-center justify-center ${
+                                    timeTarget === target ? 'bg-gray-600 text-white shadow-md' : 'bg-gray-200 hover:bg-gray-300 text-gray-700'
+                                }`}
+                            >
+                                {target}초
+                            </button>
+                            ))}
+                        </div>
+                        {/* Word Options */}
+                        <div className={`absolute inset-0 flex items-center justify-start space-x-2 transition-all duration-300 ease-in-out ${mode === 'words' ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-3 pointer-events-none'}`}>
+                            {[30, 50, 100].map(target => (
+                            <button
+                                key={`word-${target}`}
+                                onClick={() => { setWordTarget(target); resetPractice(); }}
+                                className={`w-[65px] h-11 rounded-lg font-medium transition-colors duration-150 ease-out flex items-center justify-center ${
+                                    wordTarget === target ? 'bg-gray-600 text-white shadow-md' : 'bg-gray-200 hover:bg-gray-300 text-gray-700'
+                                }`}
+                            >
+                                {target}개
+                            </button>
+                            ))}
+                        </div>
+                    </div>
                 </div>
-
-                <div className="flex space-x-2 ml-4">
-                  <button
-                    onClick={() => handleModeChange('words')}
-                    className={`w-[80px] h-[48px] rounded-lg font-medium transition-colors duration-150 ease-out flex items-center justify-center ${
-                      mode === 'words'
-                        ? 'bg-gray-700 text-white hover:bg-gray-800 shadow-md'
-                        : 'bg-gray-200 hover:bg-gray-300 text-gray-700'
-                    }`}
-                  >
-                    단어
-                  </button>
-                  <button
-                    onClick={() => handleModeChange('sentences')}
-                    className={`w-[80px] h-[48px] rounded-lg font-medium transition-colors duration-150 ease-out flex items-center justify-center ${
-                      mode === 'sentences'
-                        ? 'bg-gray-700 text-white hover:bg-gray-800 shadow-md'
-                        : 'bg-gray-200 hover:bg-gray-300 text-gray-700'
-                    }`}
-                  >
-                    문장
-                  </button>
-                </div>
-              </div>
             </div>
-          </div>
+            {/* E: Code Change */}
 
-          {/* S: Code Change - Unified display box */}
+
           <div className="mb-6 bg-white p-6 rounded-lg shadow border border-gray-200">
-            {/* Typing display area */}
             <div className="text-2xl leading-relaxed flex items-center whitespace-pre-wrap min-h-[3rem]">
               {renderCurrentText()}
               {renderNextWord()}
             </div>
-
-            {/* Input field for basic mode */}
-            {typingMode !== 'overlay' && (
-              <>
-                <hr className="my-4 border-gray-200" />
-                <div className="relative w-full">
-                  <input
-                    type="text"
-                    value={userInput}
-                    onChange={handleInputChange}
-                    onKeyDown={handleKeyDown}
-                    className="w-full text-2xl bg-transparent focus:outline-none placeholder-gray-400"
-                    placeholder={mode === 'words' ? "단어를 입력하고 스페이스바나 엔터를 누르세요..." : "문장을 입력하고 엔터를 누르세요..."}
-                    autoFocus
-                  />
-                </div>
-              </>
-            )}
+            
+            <div 
+              className={`transition-all duration-300 ease-in-out overflow-hidden border-t border-gray-200 ${
+                typingMode === 'overlay' ? 'max-h-0 opacity-0 pt-0' : 'max-h-20 opacity-100 pt-4'
+              }`}
+            >
+              <div className="relative w-full">
+                <input
+                  ref={basicInputRef}
+                  type="text"
+                  disabled={typingMode === 'overlay'}
+                  value={userInput}
+                  onChange={handleInputChange}
+                  onKeyDown={handleKeyDown}
+                  className="w-full text-2xl bg-transparent focus:outline-none placeholder-gray-400"
+                  placeholder={mode === 'sentences' ? "문장을 입력하고 엔터를 누르세요..." : "단어를 입력하고 스페이스바를 누르세요..."}
+                />
+              </div>
+            </div>
           </div>
-          {/* E: Code Change */}
 
           {typingMode === 'overlay' && (
             <input
+              ref={overlayInputRef}
               type="text"
               value={userInput}
               onChange={handleInputChange}
               onKeyDown={handleKeyDown}
               className="opacity-0 absolute -z-10 pointer-events-none"
-              autoFocus
             />
           )}
 
           <div className="flex justify-between items-center text-lg text-gray-600">
-            <span>
-              {mode === 'words'
-                ? `진행률: ${completedCount}/${wordTarget}개`
-                : `완료한 개수: ${completedCount}개`
-              }
+            <span className="font-semibold">
+              {mode === 'words' && `진행률: ${completedCount}/${wordTarget}개`}
+              {mode === 'time' && `완료한 단어: ${completedCount}개`}
+              {mode === 'sentences' && `완료한 문장: ${completedCount}개`}
             </span>
-            <div className="flex space-x-4">
-              {mode === 'words' && <span className="text-sm text-gray-500">연속 정타: {consecutiveCorrectWords}개</span>}
-              <span className="text-sm text-gray-500">
-                {typingMode === 'basic' ? '기본 모드' : '겹쳐모드'}
-              </span>
-              <span className="text-sm text-gray-600">
-                {mode === 'words'
-                  ? `전체 ${totalCharacters}자 입력 (정확: ${correctCharacters}자)`
-                  : `현재 ${userInput.length}/${currentText.length}자`
-                }
-              </span>
+            <div className="flex items-center space-x-4">
+                {mode === 'sentences' && currentText && (
+                    <span className="text-sm text-gray-500 italic">
+                    # {(() => {
+                        const sentence = allTexts.find(item => item && item.text === currentText);
+                        return sentence ? sentence.source : '알 수 없음';
+                    })()}
+                    </span>
+                )}
+                <span className="text-sm text-gray-500">연속 정타: {consecutiveCorrectWords}개</span>
             </div>
           </div>
         </div>
@@ -654,16 +630,24 @@ return (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 transition-all duration-300">
           <div className="bg-white p-8 rounded-lg shadow-lg text-center max-w-md w-full mx-4 border border-gray-200 transform transition-all duration-300 scale-100">
             <h2 className="text-3xl font-bold mb-6 text-gray-800">
-              목표 달성!
+              {mode === 'time' ? '시간 종료!' : '목표 달성!'}
             </h2>
             <div className="mb-6 space-y-4">
               <div className="text-lg text-gray-700">
-                <span className="font-semibold">{wordTarget}개 단어 완료!</span>
+                <span className="font-semibold">
+                    {mode === 'words' && `${wordTarget}개 단어 완료!`}
+                    {mode === 'time' && `${timeTarget}초 동안의 결과입니다.`}
+                    {mode === 'sentences' && '문장 입력 완료!'}
+                </span>
               </div>
               <div className="grid grid-cols-2 gap-4 text-xl">
                 <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-                  <div className="text-gray-700 font-bold text-2xl">{cpm}</div>
-                  <div className="text-gray-600 text-sm">CPM</div>
+                  <div className="text-gray-700 font-bold text-2xl">
+                    {mode === 'time' ? completedCount : cpm}
+                  </div>
+                  <div className="text-gray-600 text-sm">
+                    {mode === 'time' ? '완료 단어' : 'CPM'}
+                  </div>
                 </div>
                 <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
                   <div className="text-gray-700 font-bold text-2xl">{accuracy}%</div>
@@ -692,7 +676,7 @@ return (
       {!isCompleted && (
         <button
           onClick={handleGoBack}
-          className="mt-8 px-4 py-2 bg-gray-700 text-white rounded-lg font-medium transition-all duration-300 ease-out hover:bg-gray-800 transform hover:scale-105 active:scale-100"
+          className="relative z-10 mt-8 px-4 py-2 bg-gray-700 text-white rounded-lg font-medium transition-all duration-300 ease-out hover:bg-gray-800 transform hover:scale-105 active:scale-100"
         >
           홈으로 돌아가기
         </button>
