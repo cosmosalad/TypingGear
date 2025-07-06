@@ -230,17 +230,30 @@ const TypingSession = () => {
     if (mode === 'words' || mode === 'time' || mode === 'sentences') { // Sentences included for final calc
       if (totalCharacters === 0) return 100;
       return Math.round((correctCharacters / totalCharacters) * 100);
-    } else {
-      if (userInput.length === 0) return 100;
-      let correct = 0;
-      for (let i = 0; i < userInput.length; i++) {
-        if (userInput[i] === currentText[i]) {
-          correct++;
-        }
+  } else {
+    if (userInput.length === 0) return 100;
+    let correct = 0;
+    for (let i = 0; i < userInput.length; i++) {
+      if (userInput[i] === currentText[i]) {
+        correct++;
       }
-      return Math.round((correct / userInput.length) * 100);
     }
+    return Math.round((correct / userInput.length) * 100);
+  }
   }, [mode, totalCharacters, correctCharacters, userInput, currentText]);
+
+  const calculateCurrentSentenceAccuracy = useCallback((input, target) => {
+    if (!input || !target) return 100;
+    let correct = 0;
+    
+    for (let i = 0; i < target.length; i++) {
+      if (i < input.length && input[i] === target[i]) {
+        correct++;
+      }
+    }
+    
+    return Math.round((correct / target.length) * 100);
+  }, []);
 
   useEffect(() => {
     if (startTime && !isCompleted && mode !== 'time') {
@@ -311,16 +324,17 @@ const TypingSession = () => {
       setCompletedCount(newCompletedCount);
     } else {
       const finalCpm = cpm;
-      // For sentences, calculate accuracy at the end of each sentence
-      const finalAccuracy = calculateAccuracy();
+      const currentSentenceAccuracy = calculateCurrentSentenceAccuracy(userInput, currentText);
       setPreviousCpm(finalCpm);
-      setPreviousAccuracy(finalAccuracy);
+      setPreviousAccuracy(currentSentenceAccuracy);
       const newCurrentText = getRandomText([currentText]);
       setCurrentText(newCurrentText);
       setUserInput('');
       setCompletedCount(newCompletedCount);
       setStartTime(null);
       setCpm(0);
+      setTotalCharacters(0);
+      setCorrectCharacters(0);
     }
   }, [
     mode, wordTarget, getRandomText, cpm, accuracy,
