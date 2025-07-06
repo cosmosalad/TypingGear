@@ -103,24 +103,35 @@ const TypingSession = () => {
     const selectedText = availableTexts[randomIndex];
     return mode === 'sentences' ? selectedText.text : selectedText;
   }, [allTexts, mode]);
-
+  
+  // MODIFICATION 1: `initializeWordQueue` LOGIC UPDATED
   const initializeWordQueue = useCallback(() => {
     if (allTexts.length === 0) return;
-    const queue = [];
-    const usedTexts = [];
+
+    if (mode === 'sentences') {
+      // In sentence mode, don't use a queue, just set the text directly
+      const randomText = getRandomText([]);
+      setCurrentText(randomText);
+      setWordQueue([]); // Clear the queue in sentence mode
+    } else {
+      // Only use the queue in word/time mode
+      const queue = [];
+      const usedTexts = [];
       for (let i = 0; i < 3; i++) {
-      const newText = getRandomText(usedTexts);
-      queue.push(newText);
-      usedTexts.push(newText);
-    }
+        const newText = getRandomText(usedTexts);
+        queue.push(newText);
+        usedTexts.push(newText);
+      }
       setWordQueue(queue);
-    setCurrentText(queue[0]);
-  }, [allTexts, getRandomText]);
+      setCurrentText(queue[0]);
+    }
+  }, [allTexts, getRandomText, mode]);
 
   useEffect(() => {
     const dataFile = mode === 'time' ? 'words' : mode;
     if (language && dataFile) {
       setIsLoading(true);
+      setCurrentText(''); // Clear current text while loading new data
       resetPractice();
       import(`../data/${language}/${dataFile}.json`)
         .then(module => {
@@ -161,7 +172,8 @@ const TypingSession = () => {
                   if (prevTime <= 1) {
                       clearInterval(timer);
                       setIsCompleted(true);
-                      const finalAccuracy = calculateAccuracy();
+                      // calculateAccuracy() 대신 직접 계산
+                      const finalAccuracy = totalCharacters === 0 ? 100 : Math.round((correctCharacters / totalCharacters) * 100);
                       setAccuracy(finalAccuracy);
                       setPreviousAccuracy(finalAccuracy);
                       setPreviousCpm(completedCount);
@@ -172,7 +184,7 @@ const TypingSession = () => {
           }, 1000);
           return () => clearInterval(timer);
       }
-  }, [mode, startTime, isCompleted, timeTarget]);
+  }, [mode, startTime, isCompleted, timeTarget, totalCharacters, correctCharacters, completedCount]);
 
   const countKoreanCharacters = useCallback((text) => {
     if (!text || typeof text !== 'string') return 0;
@@ -215,7 +227,7 @@ const TypingSession = () => {
   }, [startTime, userInput, language, countKoreanCharacters, mode, completedWords]);
 
   const calculateAccuracy = useCallback(() => {
-    if (mode === 'words' || mode === 'time') {
+    if (mode === 'words' || mode === 'time' || mode === 'sentences') { // Sentences included for final calc
       if (totalCharacters === 0) return 100;
       return Math.round((correctCharacters / totalCharacters) * 100);
     } else {
@@ -241,7 +253,7 @@ const TypingSession = () => {
       return () => clearInterval(interval);
     }
   }, [calculateCPM, calculateAccuracy, startTime, isCompleted, mode]);
-
+    
   const moveToNextText = useCallback(() => {
     const isCorrect = userInput === currentText;
 
@@ -265,7 +277,7 @@ const TypingSession = () => {
 
     const newCompletedCount = completedCount + 1;
 
-    if ((mode === 'words' || mode === 'time') && currentText) {
+    if ((mode === 'words' || mode === 'time' || mode === 'sentences') && currentText) {
       setCompletedWords(prev => [...prev, currentText]);
       const wordLength = language === 'kr' ? countKoreanCharacters(currentText) : currentText.length;
       setTotalCharacters(prev => prev + wordLength);
@@ -286,18 +298,21 @@ const TypingSession = () => {
     }
 
     if (mode !== 'sentences') {
-      if (wordQueue.length >= 3) {
+      if (wordQueue.length >= 2) { // Logic adjusted for queue handling
         const currentWords = wordQueue.map(w => w);
         const newWord = getRandomText(currentWords);
         const newQueue = [...wordQueue.slice(1), newWord];
         setWordQueue(newQueue);
         setCurrentText(newQueue[0]);
+      } else { // Fallback if queue is smaller than expected
+        initializeWordQueue();
       }
       setUserInput('');
       setCompletedCount(newCompletedCount);
     } else {
       const finalCpm = cpm;
-      const finalAccuracy = accuracy;
+      // For sentences, calculate accuracy at the end of each sentence
+      const finalAccuracy = calculateAccuracy();
       setPreviousCpm(finalCpm);
       setPreviousAccuracy(finalAccuracy);
       const newCurrentText = getRandomText([currentText]);
@@ -310,14 +325,13 @@ const TypingSession = () => {
   }, [
     mode, wordTarget, getRandomText, cpm, accuracy,
     completedCount, calculateCPM, currentText, userInput, language,
-    countKoreanCharacters, calculateAccuracy, consecutiveCorrectWords, wordQueue
+    countKoreanCharacters, calculateAccuracy, consecutiveCorrectWords, wordQueue, initializeWordQueue
   ]);
 
   const handleModeChange = useCallback((newMode) => {
     if (newMode === mode) return;
     setMode(newMode);
-    resetPractice();
-    // Re-initialization will be triggered by useEffect watching `allTexts`
+    // resetPractice is now called inside the main useEffect for language/mode changes
     setTimeout(() => {
       if (typingMode === 'overlay') {
         overlayInputRef.current?.focus();
@@ -325,10 +339,12 @@ const TypingSession = () => {
         basicInputRef.current?.focus();
       }
     }, 100);
-  }, [resetPractice, mode, typingMode]);
+  }, [mode, typingMode]);
 
   const handleInputChange = useCallback((e) => {
     const input = e.target.value;
+    if (isCompleted) return;
+
     if (mode === 'sentences') {
         if (!startTime && input.length > 0) {
             setStartTime(Date.now());
@@ -343,16 +359,23 @@ const TypingSession = () => {
       }
       setUserInput(input);
     }
-  }, [startTime, currentText, mode]);
+  }, [startTime, currentText, mode, isCompleted]);
 
   const checkCompletion = useCallback(() => {
-    if (currentText && ((mode !== 'sentences' && userInput.length >= currentText.length) || (userInput === currentText))) {
-        moveToNextText();
-        return true;
+    if (currentText && userInput.trim() !== '') {
+        if (mode === 'sentences') {
+            if (userInput.length >= currentText.length || userInput === currentText) {
+                moveToNextText();
+                return true;
+            }
+        } else {
+            moveToNextText();
+            return true;
+        }
     }
     return false;
   }, [userInput, currentText, moveToNextText, mode]);
-
+    
   const handleKeyDown = useCallback((e) => {
     if (e.key === '-') {
       e.preventDefault();
@@ -362,16 +385,17 @@ const TypingSession = () => {
 
     const isWordOrTimeMode = mode === 'words' || mode === 'time';
 
-    if ((e.key === 'Enter' && mode === 'sentences') || (e.key === ' ' && isWordOrTimeMode) || (e.key === 'Enter' && isWordOrTimeMode)) {
+    if ((e.key === 'Enter' && mode === 'sentences') || 
+        (e.key === ' ' && isWordOrTimeMode) ||
+        (e.key === 'Enter' && isWordOrTimeMode) ||
+        (e.key === ' ' && mode === 'sentences' && userInput.length >= currentText.length)) { 
         e.preventDefault();
-        if (userInput.trim() !== '') {
-            checkCompletion();
-        }
+        checkCompletion();
     } else if (e.key === 'Escape') {
       e.preventDefault();
       setUserInput('');
     }
-  }, [checkCompletion, mode, userInput]);
+  }, [checkCompletion, mode, userInput, currentText]);
   
   const findCurrentWordBoundaries = useCallback((text, cursorIndex) => {
     if (!text || typeof text !== 'string') return { start: 0, end: 0 };
@@ -466,16 +490,19 @@ const TypingSession = () => {
     }
   }, [currentText, userInput, language, mode, typingMode, findCurrentWordBoundaries]);
 
+  // MODIFICATION 2: `renderNextWords` LOGIC UPDATED
   const renderNextWords = useCallback(() => {
-    if (mode === 'sentences' || wordQueue.length < 3) return null;
+    if (mode === 'sentences' || wordQueue.length < 2) return null;
     return (
       <>
         <span className="text-gray-400 text-2xl ml-4 opacity-50">
           {wordQueue[1]}
         </span>
-        <span className="text-gray-400 text-2xl ml-4 opacity-30">
-          {wordQueue[2]}
-        </span>
+        {wordQueue.length >= 3 && (
+          <span className="text-gray-400 text-2xl ml-4 opacity-30">
+            {wordQueue[2]}
+          </span>
+        )}
       </>
     );
   }, [mode, wordQueue]);
@@ -515,12 +542,17 @@ return (
         </div>
       ) : (
         <div className="relative z-10 w-full max-w-4xl">
+           {/* MODIFICATION 3: PREVIOUS ACCURACY DISPLAY ADDED */}
           <div className="mb-6 flex justify-between items-center">
             <div className="flex space-x-4 text-lg font-semibold">
                 {mode === 'time' && <span className="text-gray-700">남은 시간: {timeLeft}초</span>}
                 {mode === 'words' && <span className="text-gray-700">타수: {cpm} CPM</span>}
                 {mode === 'sentences' && <span className="text-gray-700">타수: {cpm} CPM</span>}
-                {mode !== 'time' && previousCpm > 0 && <span className="text-gray-500">이전: {previousCpm} CPM</span>}
+                {mode !== 'time' && previousCpm > 0 && (
+                  <span className="text-gray-500">
+                    이전: {previousCpm} CPM / {previousAccuracy}%
+                  </span>
+                )}
             </div>
           </div>
             <div className="mb-6 min-h-16 flex justify-between items-center">
@@ -562,8 +594,7 @@ return (
                             <button
                                 key={`time-${target}`}
                                 onClick={() => { 
-                                  setTimeTarget(target); 
-                                  resetPractice(); 
+                                  setTimeTarget(target);
                                   setTimeout(() => {
                                     if (typingMode === 'overlay') {
                                       overlayInputRef.current?.focus();
@@ -585,8 +616,7 @@ return (
                             <button
                                 key={`word-${target}`}
                                 onClick={() => { 
-                                  setWordTarget(target); 
-                                  resetPractice();
+                                  setWordTarget(target);
                                   setTimeout(() => {
                                     if (typingMode === 'overlay') {
                                       overlayInputRef.current?.focus();
@@ -606,11 +636,14 @@ return (
                     </div>
                 </div>
             </div>
-
+            
+          {/* MODIFICATION 4: LOADING CONDITION UPDATED */}
           <div className="mb-6 bg-white p-6 rounded-lg shadow border border-gray-200">
             <div className={`text-2xl leading-relaxed flex items-center whitespace-pre-wrap min-h-[3rem] ${isLoading ? 'opacity-50' : ''}`}>
-              {isLoading || wordQueue.length === 0 ? (
+              {isLoading ? (
                 <span className="text-gray-400">새로운 텍스트 불러오는 중...</span>
+              ) : !currentText ? (
+                <span className="text-gray-400">텍스트를 불러오는 중...</span>
               ) : (
                 <>
                   {renderCurrentText()}
@@ -628,12 +661,12 @@ return (
                 <input
                   ref={basicInputRef}
                   type="text"
-                  disabled={isLoading || typingMode === 'overlay'}
+                  disabled={isLoading || isCompleted || typingMode === 'overlay'}
                   value={userInput}
                   onChange={handleInputChange}
                   onKeyDown={handleKeyDown}
-                  className={`w-full text-2xl bg-transparent focus:outline-none placeholder-gray-400 ${isLoading ? 'opacity-50' : ''}`}
-                  placeholder={mode === 'sentences' ? "문장을 입력하고 엔터를 누르세요..." : "단어를 입력하고 스페이스바나 엔터를 누르세요..."}
+                  className={`w-full text-2xl bg-transparent focus:outline-none placeholder-gray-400 ${isLoading || isCompleted ? 'opacity-50' : ''}`}
+                  placeholder={mode === 'sentences' ? "문장을 입력하세요." : "단어를 입력하세요."}
                 />
               </div>
             </div>
@@ -643,7 +676,7 @@ return (
             <input
               ref={overlayInputRef}
               type="text"
-              disabled={isLoading}
+              disabled={isLoading || isCompleted}
               value={userInput}
               onChange={handleInputChange}
               onKeyDown={handleKeyDown}
@@ -705,7 +738,7 @@ return (
               <button
                 onClick={() => {
                   resetPractice();
-                  // Queue will be re-initialized by useEffect
+                  initializeWordQueue();
                 }}
                 className="px-6 py-3 bg-gray-700 text-white rounded-lg shadow text-lg font-semibold transition-all duration-300 ease-out hover:bg-gray-800 transform hover:scale-105 active:scale-100"
               >
