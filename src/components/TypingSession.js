@@ -7,13 +7,13 @@ const TypingSession = () => {
   
   const [language, setLanguage] = useState(() => localStorage.getItem('typingLanguage') || 'en');
   const [mode, setMode] = useState(() => localStorage.getItem('typingMode') || 'words');
-  const [timeTarget, setTimeTarget] = useState(30);
-  const [timeLeft, setTimeLeft] = useState(30);
-  const [wordTarget, setWordTarget] = useState(30);
+  const [timeTarget, setTimeTarget] = useState(() => parseInt(localStorage.getItem('typingTimeTarget')) || 30);
+  const [timeLeft, setTimeLeft] = useState(() => parseInt(localStorage.getItem('typingTimeTarget')) || 30);
+  const [wordTarget, setWordTarget] = useState(() => parseInt(localStorage.getItem('typingWordTarget')) || 30);
   const [typingMode, setTypingMode] = useState('basic');
   const [allTexts, setAllTexts] = useState([]);
   const [currentText, setCurrentText] = useState('');
-  const [nextText, setNextText] = useState('');
+  const [wordQueue, setWordQueue] = useState([]); // [현재, 다음, 그다음] 배열
   const [userInput, setUserInput] = useState('');
   const [startTime, setStartTime] = useState(null);
   const [cpm, setCpm] = useState(0);
@@ -39,6 +39,13 @@ const TypingSession = () => {
   useEffect(() => {
     localStorage.setItem('typingMode', mode);
   }, [mode]);
+  useEffect(() => {
+    localStorage.setItem('typingTimeTarget', timeTarget.toString());
+  }, [timeTarget]);
+
+  useEffect(() => {
+    localStorage.setItem('typingWordTarget', wordTarget.toString());
+  }, [wordTarget]);
 
   useEffect(() => {
     if (isCompleted) return;
@@ -49,12 +56,6 @@ const TypingSession = () => {
       basicInputRef.current?.focus();
     }
   }, [typingMode, isLoading, isCompleted]);
-
-  const handleLanguageToggle = useCallback(() => {
-    const newLanguage = language === 'en' ? 'kr' : 'en';
-    setLanguage(newLanguage);
-    resetPractice();
-  }, [language]);
 
   const resetPractice = useCallback(() => {
     setUserInput('');
@@ -69,34 +70,58 @@ const TypingSession = () => {
     setIsCompleted(false);
     setConsecutiveCorrectWords(0);
     setCompletedWords([]);
+    setWordQueue([]);
     if (mode === 'time') {
       setTimeLeft(timeTarget);
     }
   }, [mode, timeTarget]);
 
-  const getRandomText = useCallback((excludeCurrent = true) => {
+  const handleLanguageToggle = useCallback(() => {
+    const newLanguage = language === 'en' ? 'kr' : 'en';
+    setLanguage(newLanguage);
+    resetPractice();
+    setTimeout(() => {
+      if (typingMode === 'overlay') {
+        overlayInputRef.current?.focus();
+      } else {
+        basicInputRef.current?.focus();
+      }
+    }, 100);
+  }, [language, typingMode, resetPractice]);
+  
+  const getRandomText = useCallback((excludeTexts = []) => {
     if (allTexts.length === 0) return '';
     let availableTexts = allTexts;
-    if (excludeCurrent && allTexts.length > 1) {
+    if (excludeTexts.length > 0 && allTexts.length > excludeTexts.length) {
       availableTexts = allTexts.filter(text => {
         const textContent = mode === 'sentences' ? text.text : text;
-        return textContent !== currentText;
+        return !excludeTexts.includes(textContent);
       });
     }
+    if (availableTexts.length === 0) availableTexts = allTexts; // 리셋
     const randomIndex = Math.floor(Math.random() * availableTexts.length);
     const selectedText = availableTexts[randomIndex];
     return mode === 'sentences' ? selectedText.text : selectedText;
-  }, [allTexts, currentText, mode]);
+  }, [allTexts, mode]);
 
-  const setNextRandomText = useCallback(() => {
-    const nextRandomText = getRandomText(true);
-    setNextText(nextRandomText);
-  }, [getRandomText]);
+  const initializeWordQueue = useCallback(() => {
+    if (allTexts.length === 0) return;
+    const queue = [];
+    const usedTexts = [];
+      for (let i = 0; i < 3; i++) {
+      const newText = getRandomText(usedTexts);
+      queue.push(newText);
+      usedTexts.push(newText);
+    }
+      setWordQueue(queue);
+    setCurrentText(queue[0]);
+  }, [allTexts, getRandomText]);
 
   useEffect(() => {
     const dataFile = mode === 'time' ? 'words' : mode;
     if (language && dataFile) {
       setIsLoading(true);
+      resetPractice();
       import(`../data/${language}/${dataFile}.json`)
         .then(module => {
           const categories = module.default.categories;
@@ -113,19 +138,6 @@ const TypingSession = () => {
             }
           });
           setAllTexts(texts);
-          if (texts.length > 0) {
-            const randomIndex = Math.floor(Math.random() * texts.length);
-            const firstText = dataFile === 'sentences' ? texts[randomIndex].text : texts[randomIndex];
-            setCurrentText(firstText);
-            if (dataFile !== 'sentences' && texts.length > 1) {
-              const nextRandomIndex = (randomIndex + 1) % texts.length;
-              setNextText(texts[nextRandomIndex]);
-            } else if (dataFile === 'sentences' && texts.length > 1) {
-              const nextRandomIndex = (randomIndex + 1) % texts.length;
-              setNextText(texts[nextRandomIndex].text);
-            }
-          }
-          resetPractice();
           setIsLoading(false);
         })
         .catch(error => {
@@ -134,33 +146,33 @@ const TypingSession = () => {
         });
     }
   }, [language, mode, resetPractice]);
+  
+  useEffect(() => {
+    if (allTexts.length > 0 && !isCompleted) {
+      initializeWordQueue();
+    }
+  }, [allTexts, isCompleted, initializeWordQueue]);
 
   useEffect(() => {
-    if (allTexts.length > 0 && currentText) {
-      setNextRandomText();
-    }
-  }, [allTexts, currentText, setNextRandomText]);
-
-    useEffect(() => {
-        if (mode === 'time' && startTime && !isCompleted) {
-            setTimeLeft(timeTarget); 
-            const timer = setInterval(() => {
-                setTimeLeft(prevTime => {
-                    if (prevTime <= 1) {
-                        clearInterval(timer);
-                        setIsCompleted(true);
-                        const finalAccuracy = calculateAccuracy();
-                        setAccuracy(finalAccuracy);
-                        setPreviousAccuracy(finalAccuracy);
-                        setPreviousCpm(completedCount);
-                        return 0;
-                    }
-                    return prevTime - 1;
-                });
-            }, 1000);
-            return () => clearInterval(timer);
-        }
-    }, [mode, startTime, isCompleted, timeTarget]);
+      if (mode === 'time' && startTime && !isCompleted) {
+          setTimeLeft(timeTarget); 
+          const timer = setInterval(() => {
+              setTimeLeft(prevTime => {
+                  if (prevTime <= 1) {
+                      clearInterval(timer);
+                      setIsCompleted(true);
+                      const finalAccuracy = calculateAccuracy();
+                      setAccuracy(finalAccuracy);
+                      setPreviousAccuracy(finalAccuracy);
+                      setPreviousCpm(completedCount);
+                      return 0;
+                  }
+                  return prevTime - 1;
+              });
+          }, 1000);
+          return () => clearInterval(timer);
+      }
+  }, [mode, startTime, isCompleted, timeTarget]);
 
   const countKoreanCharacters = useCallback((text) => {
     if (!text || typeof text !== 'string') return 0;
@@ -274,9 +286,12 @@ const TypingSession = () => {
     }
 
     if (mode !== 'sentences') {
-      if (nextText) {
-        setCurrentText(nextText);
-        setNextRandomText();
+      if (wordQueue.length >= 3) {
+        const currentWords = wordQueue.map(w => w);
+        const newWord = getRandomText(currentWords);
+        const newQueue = [...wordQueue.slice(1), newWord];
+        setWordQueue(newQueue);
+        setCurrentText(newQueue[0]);
       }
       setUserInput('');
       setCompletedCount(newCompletedCount);
@@ -285,7 +300,7 @@ const TypingSession = () => {
       const finalAccuracy = accuracy;
       setPreviousCpm(finalCpm);
       setPreviousAccuracy(finalAccuracy);
-      const newCurrentText = getRandomText(true);
+      const newCurrentText = getRandomText([currentText]);
       setCurrentText(newCurrentText);
       setUserInput('');
       setCompletedCount(newCompletedCount);
@@ -293,16 +308,24 @@ const TypingSession = () => {
       setCpm(0);
     }
   }, [
-    mode, wordTarget, nextText, getRandomText, setNextRandomText, cpm, accuracy,
+    mode, wordTarget, getRandomText, cpm, accuracy,
     completedCount, calculateCPM, currentText, userInput, language,
-    countKoreanCharacters, calculateAccuracy, consecutiveCorrectWords
+    countKoreanCharacters, calculateAccuracy, consecutiveCorrectWords, wordQueue
   ]);
 
   const handleModeChange = useCallback((newMode) => {
     if (newMode === mode) return;
     setMode(newMode);
     resetPractice();
-  }, [resetPractice, mode]);
+    // Re-initialization will be triggered by useEffect watching `allTexts`
+    setTimeout(() => {
+      if (typingMode === 'overlay') {
+        overlayInputRef.current?.focus();
+      } else {
+        basicInputRef.current?.focus();
+      }
+    }, 100);
+  }, [resetPractice, mode, typingMode]);
 
   const handleInputChange = useCallback((e) => {
     const input = e.target.value;
@@ -330,7 +353,6 @@ const TypingSession = () => {
     return false;
   }, [userInput, currentText, moveToNextText, mode]);
 
-
   const handleKeyDown = useCallback((e) => {
     if (e.key === '-') {
       e.preventDefault();
@@ -340,14 +362,16 @@ const TypingSession = () => {
 
     const isWordOrTimeMode = mode === 'words' || mode === 'time';
 
-    if ((e.key === 'Enter' && mode === 'sentences') || (e.key === ' ' && isWordOrTimeMode)) {
+    if ((e.key === 'Enter' && mode === 'sentences') || (e.key === ' ' && isWordOrTimeMode) || (e.key === 'Enter' && isWordOrTimeMode)) {
         e.preventDefault();
-        checkCompletion();
+        if (userInput.trim() !== '') {
+            checkCompletion();
+        }
     } else if (e.key === 'Escape') {
       e.preventDefault();
       setUserInput('');
     }
-  }, [checkCompletion, mode]);
+  }, [checkCompletion, mode, userInput]);
   
   const findCurrentWordBoundaries = useCallback((text, cursorIndex) => {
     if (!text || typeof text !== 'string') return { start: 0, end: 0 };
@@ -442,14 +466,19 @@ const TypingSession = () => {
     }
   }, [currentText, userInput, language, mode, typingMode, findCurrentWordBoundaries]);
 
-  const renderNextWord = useCallback(() => {
-    if (mode === 'sentences' || !nextText) return null;
+  const renderNextWords = useCallback(() => {
+    if (mode === 'sentences' || wordQueue.length < 3) return null;
     return (
-      <span className="text-gray-400 text-2xl ml-4 opacity-50">
-        {nextText}
-      </span>
+      <>
+        <span className="text-gray-400 text-2xl ml-4 opacity-50">
+          {wordQueue[1]}
+        </span>
+        <span className="text-gray-400 text-2xl ml-4 opacity-30">
+          {wordQueue[2]}
+        </span>
+      </>
     );
-  }, [mode, nextText]);
+  }, [mode, wordQueue]);
 
   const handleContainerClick = useCallback((e) => {
     if (e.target.tagName === 'BUTTON' || e.target.tagName === 'INPUT') {
@@ -474,9 +503,7 @@ return (
     >
       <GearSystem ref={gearSystemRef} />
 
-      {isLoading ? (
-        <div className="relative z-10 text-2xl text-gray-600">데이터를 불러오는 중...</div>
-      ) : allTexts.length === 0 ? (
+      {allTexts.length === 0 && !isLoading ? (
         <div className="relative z-10 flex flex-col items-center">
           <div className="text-2xl text-gray-600 mb-4">데이터를 불러올 수 없습니다.</div>
           <button
@@ -496,8 +523,6 @@ return (
                 {mode !== 'time' && previousCpm > 0 && <span className="text-gray-500">이전: {previousCpm} CPM</span>}
             </div>
           </div>
-
-            {/* S: Code Change - New button layout */}
             <div className="mb-6 min-h-16 flex justify-between items-center">
                 <div className="flex items-center space-x-4">
                     <button
@@ -515,7 +540,6 @@ return (
                 </div>
 
                 <div className="flex items-center space-x-2">
-                    {/* Main mode buttons as tabs */}
                     <div className="flex items-center p-1 bg-gray-200 rounded-lg space-x-1">
                         {['time', 'words', 'sentences'].map(modeName => (
                             <button
@@ -532,14 +556,22 @@ return (
                         ))}
                     </div>
 
-                    {/* Animated container for sub-mode buttons */}
                     <div className="relative h-[48px] w-[220px]">
-                        {/* Time Options */}
                         <div className={`absolute inset-0 flex items-center justify-start space-x-2 transition-all duration-300 ease-in-out ${mode === 'time' ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-3 pointer-events-none'}`}>
                             {[30, 60, 120].map(target => (
                             <button
                                 key={`time-${target}`}
-                                onClick={() => { setTimeTarget(target); resetPractice(); }}
+                                onClick={() => { 
+                                  setTimeTarget(target); 
+                                  resetPractice(); 
+                                  setTimeout(() => {
+                                    if (typingMode === 'overlay') {
+                                      overlayInputRef.current?.focus();
+                                    } else {
+                                      basicInputRef.current?.focus();
+                                    }
+                                  }, 100);
+                                }}
                                 className={`w-[65px] h-11 rounded-lg font-medium transition-colors duration-150 ease-out flex items-center justify-center ${
                                     timeTarget === target ? 'bg-gray-600 text-white shadow-md' : 'bg-gray-200 hover:bg-gray-300 text-gray-700'
                                 }`}
@@ -548,12 +580,21 @@ return (
                             </button>
                             ))}
                         </div>
-                        {/* Word Options */}
                         <div className={`absolute inset-0 flex items-center justify-start space-x-2 transition-all duration-300 ease-in-out ${mode === 'words' ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-3 pointer-events-none'}`}>
                             {[30, 50, 100].map(target => (
                             <button
                                 key={`word-${target}`}
-                                onClick={() => { setWordTarget(target); resetPractice(); }}
+                                onClick={() => { 
+                                  setWordTarget(target); 
+                                  resetPractice();
+                                  setTimeout(() => {
+                                    if (typingMode === 'overlay') {
+                                      overlayInputRef.current?.focus();
+                                    } else {
+                                      basicInputRef.current?.focus();
+                                    }
+                                  }, 100);
+                                }}
                                 className={`w-[65px] h-11 rounded-lg font-medium transition-colors duration-150 ease-out flex items-center justify-center ${
                                     wordTarget === target ? 'bg-gray-600 text-white shadow-md' : 'bg-gray-200 hover:bg-gray-300 text-gray-700'
                                 }`}
@@ -565,13 +606,17 @@ return (
                     </div>
                 </div>
             </div>
-            {/* E: Code Change */}
-
 
           <div className="mb-6 bg-white p-6 rounded-lg shadow border border-gray-200">
-            <div className="text-2xl leading-relaxed flex items-center whitespace-pre-wrap min-h-[3rem]">
-              {renderCurrentText()}
-              {renderNextWord()}
+            <div className={`text-2xl leading-relaxed flex items-center whitespace-pre-wrap min-h-[3rem] ${isLoading ? 'opacity-50' : ''}`}>
+              {isLoading || wordQueue.length === 0 ? (
+                <span className="text-gray-400">새로운 텍스트 불러오는 중...</span>
+              ) : (
+                <>
+                  {renderCurrentText()}
+                  {renderNextWords()}
+                </>
+              )}
             </div>
             
             <div 
@@ -583,12 +628,12 @@ return (
                 <input
                   ref={basicInputRef}
                   type="text"
-                  disabled={typingMode === 'overlay'}
+                  disabled={isLoading || typingMode === 'overlay'}
                   value={userInput}
                   onChange={handleInputChange}
                   onKeyDown={handleKeyDown}
-                  className="w-full text-2xl bg-transparent focus:outline-none placeholder-gray-400"
-                  placeholder={mode === 'sentences' ? "문장을 입력하고 엔터를 누르세요..." : "단어를 입력하고 스페이스바를 누르세요..."}
+                  className={`w-full text-2xl bg-transparent focus:outline-none placeholder-gray-400 ${isLoading ? 'opacity-50' : ''}`}
+                  placeholder={mode === 'sentences' ? "문장을 입력하고 엔터를 누르세요..." : "단어를 입력하고 스페이스바나 엔터를 누르세요..."}
                 />
               </div>
             </div>
@@ -598,6 +643,7 @@ return (
             <input
               ref={overlayInputRef}
               type="text"
+              disabled={isLoading}
               value={userInput}
               onChange={handleInputChange}
               onKeyDown={handleKeyDown}
@@ -657,7 +703,10 @@ return (
             </div>
             <div className="flex justify-center space-x-4">
               <button
-                onClick={resetPractice}
+                onClick={() => {
+                  resetPractice();
+                  // Queue will be re-initialized by useEffect
+                }}
                 className="px-6 py-3 bg-gray-700 text-white rounded-lg shadow text-lg font-semibold transition-all duration-300 ease-out hover:bg-gray-800 transform hover:scale-105 active:scale-100"
               >
                 다시 시작
