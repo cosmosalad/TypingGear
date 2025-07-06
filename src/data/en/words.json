@@ -1,27 +1,138 @@
 {
   "categories": [
     {
-      "name": "Basic Words",
+      "name": "Greetings/Everyday",
       "words": [
-        "hello", "world", "typing", "practice", "keyboard", "computer", 
-        "program", "website", "learning", "skill", "speed", "accuracy",
-        "finger", "hand", "eye", "focus", "rhythm", "flow", "muscle", "memory"
+        "hello", "goodbye", "thanks", "please", "sorry",
+        "welcome", "morning", "afternoon", "evening", "night",
+        "today", "tomorrow", "yesterday", "always", "never",
+        "maybe", "of course", "actually", "really", "anyway",
+        "because", "with", "from", "about", "something",
+        "everything", "nothing", "beautiful", "wonderful", "awesome",
+        "congratulations", "pardon", "cheers", "indeed", "perhaps",
+        "therefore", "however", "another", "different", "important",
+        "special", "happy", "easy", "difficult", "interesting",
+        "delicious", "fantastic", "amazing", "excellent", "perfect",
+        "usually", "often", "rarely", "finally", "suddenly",
+        "together", "against", "without", "inside", "outside"
       ]
     },
     {
-      "name": "Programming Terms",
+      "name": "People/Family",
       "words": [
-        "function", "variable", "array", "object", "method", "class",
-        "component", "framework", "library", "database", "algorithm", "debug",
-        "syntax", "compiler", "runtime", "boolean", "string", "integer"
+        "people", "family", "mother", "father", "parent",
+        "baby", "child", "son", "daughter", "brother",
+        "sister", "friend", "teacher", "student", "doctor",
+        "nurse", "police", "artist", "writer", "neighbor",
+        "customer", "employee", "manager", "person", "woman",
+        "man", "human", "character", "president", "stranger",
+        "aunt", "uncle", "cousin", "nephew", "niece",
+        "husband", "wife", "guest", "host", "captain",
+        "coach", "player", "fan", "singer", "actor",
+        "director", "scientist", "engineer", "designer", "lawyer",
+        "judge", "chef", "firefighter", "pilot", "assistant",
+        "colleague", "client", "leader", "member", "audience"
       ]
     },
     {
-      "name": "Advanced Vocabulary",
+      "name": "Places",
       "words": [
-        "asynchronous", "polymorphism", "encapsulation", "inheritance",
-        "abstraction", "optimization", "architecture", "scalability",
-        "authentication", "authorization", "middleware", "virtualization"
+        "place", "school", "home", "house", "office",
+        "hospital", "library", "park", "restaurant", "store",
+        "bank", "airport", "station", "market", "cinema",
+        "museum", "city", "country", "world", "room",
+        "kitchen", "bedroom", "bathroom", "street", "road",
+        "building", "garden", "university", "downtown", "corner",
+        "apartment", "stadium", "theater", "gymnasium", "pool",
+        "cafe", "hotel", "church", "temple", "castle",
+        "palace", "factory", "farm", "laboratory", "studio",
+        "clinic", "court", "garage", "basement", "balcony",
+        "hallway", "elevator", "bridge", "tunnel", "highway",
+        "sidewalk", "capital", "village", "continent", "area"
+      ]
+    },
+    {
+      "name": "Things/Objects",
+      "words": [
+        "thing", "computer", "phone", "desk", "chair",
+        "table", "bed", "television", "camera", "photo",
+        "book", "pencil", "paper", "window", "door",
+        "key", "wallet", "money", "clothes", "shoes",
+        "watch", "glasses", "mirror", "bottle", "water",
+        "box", "present", "letter", "picture", "question",
+        "laptop", "keyboard", "mouse", "screen", "headphone",
+        "sofa", "lamp", "carpet", "curtain", "blanket",
+        "pillow", "towel", "shampoo", "toothbrush", "refrigerator",
+        "microwave", "oven", "hammer", "nail", "tool",
+        "umbrella", "ticket", "passport", "backpack", "magazine",
+        "newspaper", "calendar", "document", "medication", "instrument"
+      ]
+    },
+    {
+      "name": "Food",
+      "words": [
+        "food", "bread", "cheese", "chicken", "beef",
+        "fruit", "apple", "banana", "orange", "vegetable",
+        "potato", "carrot", "salad", "rice", "pizza",
+        "hamburger", "coffee", "tea", "milk", "juice",
+        "sugar", "salt", "pepper", "cake", "chocolate",
+        "cookie", "breakfast", "lunch", "dinner", "sandwich",
+        "pork", "seafood", "shrimp", "egg", "noodle",
+        "soup", "stew", "cereal", "yogurt", "butter",
+        "flour", "oil", "vinegar", "sauce", "spice",
+        "herb", "garlic", "onion", "tomato", "lemon",
+        "grape", "strawberry", "dessert", "snack", "ice cream"
+      ]
+    },
+    {
+      "name": "Nature",
+      "words": [
+        "nature", "sky", "cloud", "wind", "sea",
+        "ocean", "river", "mountain", "tree", "flower",
+        "grass", "sun", "moon", "star", "rain",
+        "snow", "storm", "fire", "earth", "stone",
+        "sand", "beach", "island", "forest", "light",
+        "shadow", "weather", "planet", "space", "energy",
+        "air", "ice", "steam", "fog", "lightning",
+        "thunder", "rainbow", "hurricane", "tornado", "earthquake",
+        "volcano", "lava", "rock", "cliff", "cave",
+        "valley", "hill", "desert", "jungle", "leaf",
+        "branch", "root", "seed", "universe", "galaxy",
+        "comet", "atmosphere", "gravity", "crystal", "mineral"
+      ]
+    },
+    {
+      "name": "Animals",
+      "words": [
+        "animal", "dog", "cat", "horse", "lion",
+        "tiger", "bear", "elephant", "monkey", "bird",
+        "fish", "pig", "cow", "sheep", "wolf",
+        "fox", "rabbit", "mouse", "snake", "turtle",
+        "whale", "shark", "dolphin", "frog", "spider",
+        "insect", "bee", "butterfly", "dragon", "dinosaur",
+        "duck", "eagle", "owl", "penguin", "parrot",
+        "peacock", "deer", "goat", "camel", "giraffe",
+        "zebra", "hippopotamus", "rhinoceros", "crocodile", "lizard",
+        "ant", "fly", "mosquito", "crab", "lobster",
+        "octopus", "squid", "jellyfish", "starfish", "bat",
+        "gorilla", "panda", "koala", "kangaroo", "squirrel"
+      ]
+    },
+    {
+      "name": "Actions/Verbs",
+      "words": [
+        "work", "study", "play", "eat", "drink",
+        "sleep", "walk", "run", "swim", "read",
+        "write", "listen", "watch", "talk", "speak",
+        "sing", "dance", "drive", "travel", "shop",
+        "cook", "clean", "help", "think", "learn",
+        "teach", "love", "like", "enjoy", "remember",
+        "forget", "understand", "believe", "know", "feel",
+        "see", "hear", "touch", "smell", "taste",
+        "give", "take", "get", "make", "do",
+        "go", "come", "start", "finish", "stop",
+        "wait", "open", "close", "win", "lose",
+        "find", "break", "build", "choose", "decide"
       ]
     }
   ]
